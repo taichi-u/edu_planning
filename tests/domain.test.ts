@@ -43,7 +43,7 @@ test('meeting projection strips research and private fields even for owner; orig
 });
 test('calendar all-day end is exclusive; marker and hash remain stable; no month-only sync',async()=>{
  const p=samplePlan().projects.find(p=>p.id==='conference-a')!,m=p.milestones.find(m=>m.kind==='event')!;
- const first=calendarPayload(p,m,'edu_planning:123');assert.equal(first.end_date,'2027-01-18');assert.equal(first.reminders.use_default,true);
+ const first=calendarPayload(p,m,'edu_planning:123');assert.ok('end_date' in first);assert.equal(first.end_date,'2027-01-18');assert.equal(first.reminders.use_default,true);
  assert.equal(await fingerprint(first),await fingerprint(calendarPayload(p,m,'edu_planning:123')));
  assert.notEqual(await fingerprint(first),await fingerprint(calendarPayload(p,{...m,start:'2027-01-16'},'edu_planning:123')));
  assert.throws(()=>calendarPayload(p,{...m,precision:'month'},'id'));
@@ -58,6 +58,6 @@ test('body and secondary text exceed WCAG 4.5:1; category marks exceed 3:1',()=>
 
 test('timed calendar preserves multi-day duration and midnight rollover',()=>{
  const p=samplePlan().projects.find(p=>p.id==='conference-a')!,m=p.milestones.find(m=>m.kind==='event')!;
- const span=calendarPayload(p,{...m,time:'17:00'},'marker');assert.equal(span.start_local,'2027-01-15T17:00:00');assert.equal(span.end_local,'2027-01-17T17:00:00');assert.equal(span.timezone,'Asia/Tokyo');
- const point=calendarPayload(p,{...m,end:'',time:'23:45'},'marker');assert.equal(point.end_local,'2027-01-16T00:15:00');
+ const span=calendarPayload(p,{...m,time:'17:00'},'marker');assert.ok('start_local' in span);assert.equal(span.start_local,'2027-01-15T17:00:00');assert.equal(span.end_local,'2027-01-17T17:00:00');assert.equal(span.timezone,'Asia/Tokyo');
+ const point=calendarPayload(p,{...m,end:'',time:'23:45'},'marker');assert.ok('end_local' in point);assert.equal(point.end_local,'2027-01-16T00:15:00');
 });

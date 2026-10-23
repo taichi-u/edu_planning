@@ -40,7 +40,7 @@ export default function Timeline({ plan, range, anchor, selected, onSelect, filt
     const height=Math.max(compact?65:82,ends.length*38+30);lanes.push({...cat,top:cursor,height});cursor+=height;
   }
   const chosen=marks.filter(m=>m.project.id===selected).sort((a,b)=>a.x-b.x);
-  return <div className="timeline-scroll"><svg className="timeline" viewBox={`0 0 ${width} ${cursor+12}`} role="img" aria-label={`${start}から${end}の研究ロードマップ。期間は帯、正式締切は菱形、開催日は丸。各項目は選択できます。`}>
+  return <div className="timeline-scroll"><svg className="timeline" viewBox={`0 0 ${width} ${cursor+12}`} role="group" aria-label={`${start}から${end}の研究ロードマップ。期間は帯、正式締切は菱形、開催日は丸。各項目は選択できます。`}>
     <defs><clipPath id={clip}><rect x={left} y="0" width={plot} height={cursor}/></clipPath></defs>
     <text x="14" y="27" className="axis-label">カテゴリー</text>
     {years.filter(y=>y.start<=end&&y.end>=start).map(y=><g key={y.label}><rect x={Math.max(left,x(y.start))} y="39" width={Math.max(0,Math.min(width-right,x(y.end))-Math.max(left,x(y.start)))} height="31" fill="#efeee8" stroke="#d8d9d3"/><text x={Math.max(left,x(y.start))+8} y="59" className="phase-label">{y.label}</text></g>)}
