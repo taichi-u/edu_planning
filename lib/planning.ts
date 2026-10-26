@@ -24,6 +24,7 @@ export const taskSchema = z.object({
   startedAt: z.string().datetime().nullable().default(null), completedAt: z.string().datetime().nullable().default(null),
   blocker: z.object({ reason: text.default(''), since: date.default(''), action: text.default(''), waitingFor: z.string().max(300).default(''), reviewOn: date.default('') }).default({}),
   horizon: z.enum(['today', 'week', 'later']).default('later'), trelloSelected: z.boolean().default(false), trelloCardId: z.string().max(300).default(''), trelloUrl: link.default(''),
+  calendarKinds: z.array(z.enum(['target', 'deadline'])).default([]),
   sample: z.boolean().default(false), archived: z.boolean().default(false), beneficiary: z.enum(['self', 'support', 'team']).default('self'),
   evidence: z.array(evidenceSchema).max(50).default([]),
 }).superRefine((t, ctx) => {
@@ -32,6 +33,7 @@ export const taskSchema = z.object({
   if (d.confirmed && (d.precision !== 'day' || !d.sourceUrl || !d.checkedAt)) ctx.addIssue({ code: 'custom', message: '確定した正式締切には日付・出典・確認日が必要です', path: ['deadline'] });
   try { new Intl.DateTimeFormat('en', { timeZone: d.timezone }); } catch { ctx.addIssue({ code: 'custom', message: 'タイムゾーンが不正です' }); }
   if (d.time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(d.time)) ctx.addIssue({ code: 'custom', message: '時刻が不正です' });
+  if (d.time && d.precision !== 'day') ctx.addIssue({ code: 'custom', message: '時刻は日付確定時のみ指定できます' });
   if (t.parentId === t.id) ctx.addIssue({ code: 'custom', message: '自分自身を親にできません' });
 });
 export type Task = z.infer<typeof taskSchema>;
@@ -42,13 +44,16 @@ export type PlanChange = z.infer<typeof changeSchema>;
 export const operationSchema = z.object({ id, provider: z.enum(['github', 'trello']), kind: z.enum(['create_task', 'update_task', 'worklog', 'trello_card']), taskId: id, baseVersion: z.number().int(), baseSourceUpdatedAt: z.string().datetime().nullable(), desired: taskSchema.nullable(), worklogId: z.string().default(''), changeId: z.string().default(''), state: z.enum(['pending', 'running', 'uncertain', 'failed', 'done']).default('pending'), createdAt: instant, lease: z.string().default(''), leaseUntil: z.string().default(''), remoteId: z.string().default(''), error: text.default('') });
 export type SyncOperation = z.infer<typeof operationSchema>;
 export const sourceSchema = z.object({ id, kind: z.enum(['github', 'trello', 'calendar', 'local', 'other']), title: z.string().max(300), status: z.enum(['ok', 'partial', 'error', 'offline', 'unverified']), checkedAt: instant.nullable(), lastSuccessAt: instant.nullable(), error: text.default(''), count: z.number().int().nonnegative().default(0) });
-export const calendarEventSchema = z.object({ id, calendarId: id, title: z.string().min(1).max(300), start: z.string().min(10).max(40), end: z.string().max(40), url: link.default(''), cancelled: z.boolean().default(false), projectIds: z.array(id).default([]) });
+const eventDate = z.string().max(40).refine(v => date.safeParse(v).success && !!v || /^\d{4}-\d{2}-\d{2}T/.test(v) && Number.isFinite(Date.parse(v)), '予定の日付が不正です');
+export const calendarEventSchema = z.object({ id, calendarId: id, title: z.string().min(1).max(300), start: eventDate, end: eventDate, url: link.default(''), cancelled: z.boolean().default(false), projectIds: z.array(id).default([]) });
 export const configSchema = z.object({ privateRepository: z.string().regex(/^[\w.-]+\/[\w.-]+$/).default('owner/private_task'), owners: z.array(z.string()).default([]), organizations: z.array(z.string()).default([]), repositories: z.array(z.string()).default([]), trelloBoard: link.default(''), trelloLists: z.record(z.string()).default({}), trelloLabels: z.record(z.string()).default({}), calendarIds: z.array(z.string()).default([]), schedule: z.object({ time: z.literal('08:00').default('08:00'), timezone: z.literal('Asia/Tokyo').default('Asia/Tokyo'), status: z.enum(['not_configured', 'needs_connection', 'verified']).default('not_configured'), automationId: z.string().default('') }).default({}) });
 export const planningSchema = z.object({ version: z.literal(1).default(1), tasks: z.array(taskSchema).max(3000).default([]), worklogs: z.array(worklogSchema).max(10000).default([]), changes: z.array(changeSchema).max(3000).default([]), operations: z.array(operationSchema).max(10000).default([]), sources: z.array(sourceSchema).default([]), events: z.array(calendarEventSchema).max(3000).default([]), config: configSchema.default({}) }).default({});
 export type Planning = z.infer<typeof planningSchema>;
 export const emptyPlanning = (): Planning => planningSchema.parse({});
 export function blankTask(projectIds: string[] = []): Task { return taskSchema.parse({ id: crypto.randomUUID(), title: '新しいタスク', projectIds }); }
 export function jstToday(now = new Date()) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now); }
+export function eventDay(value:string) { return value.length===10 ? value : jstToday(new Date(value)); }
+export function elapsedDays(t:Task,now=new Date()) { return t.startedAt ? Math.max(0,Math.floor((Date.parse(t.completedAt || now.toISOString())-Date.parse(t.startedAt))/86400000)) : null; }
 export function shiftDay(day: string, n: number) { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 export function shiftMonth(day: string, months: number) { const d = new Date(day + 'T00:00:00Z'), n = d.getUTCDate(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + months); d.setUTCDate(Math.min(n, new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate())); return d.toISOString().slice(0, 10); }
 export function horizonEnd(start: string, horizon: Horizon) { return horizon === 'all' ? '9999-12-31' : horizon === 'week' ? shiftDay(start, 6) : shiftDay(shiftMonth(start, horizon === 'month' ? 1 : horizon === 'quarter' ? 3 : 6), -1); }
@@ -82,6 +87,7 @@ export function applyPlanningAction(current: Planning, input: PlanningAction, no
   const p = structuredClone(current); let result: unknown = { saved: true }; let summary = input.action as string;
   function find(id: string) { const t = p.tasks.find(t => t.id === id); if (!t) throw new Error('タスクが見つかりません'); return t; }
   function queue(desired: Task, changeId = '') {
+    if (p.config.privateRepository === 'owner/private_task') throw new Error('先に連携状況で個人タスクのリポジトリを設定してください');
     const prior = p.tasks.find(t => t.id === desired.id);
     if (!canWriteTask(prior ?? desired, p.config) || !canWriteTask(desired, p.config)) throw new Error('private_task以外のIssueは参照専用です');
     if (desired.sample) throw new Error('仮データは外部同期できません');
@@ -124,9 +130,9 @@ export function applyPlanningAction(current: Planning, input: PlanningAction, no
     const source = input.source; const priorSource = p.sources.find(s => s.id === source.id); if (priorSource?.checkedAt && source.checkedAt && priorSource.checkedAt > source.checkedAt) throw new Error('古い取得結果です');
     p.sources = p.sources.filter(s => s.id !== source.id); p.sources.push({ ...source, lastSuccessAt: source.status === 'ok' ? source.checkedAt : priorSource?.lastSuccessAt ?? null });
     if (['ok', 'partial'].includes(source.status)) {
-      for (const raw of input.tasks ?? []) { const t = taskSchema.parse(raw), prior = p.tasks.find(v => v.id === t.id); if (prior && prior.sourceUpdatedAt && (!t.sourceUpdatedAt || prior.sourceUpdatedAt > t.sourceUpdatedAt)) continue;
+      for (const raw of input.tasks ?? []) { const t = taskSchema.parse(raw), prior = p.tasks.find(v => v.id === t.id); if (prior && prior.sourceUpdatedAt && (!t.sourceUpdatedAt || prior.sourceUpdatedAt >= t.sourceUpdatedAt)) continue;
         if (prior && pendingFor(p, t.id)) { if (t.sourceUpdatedAt !== prior.sourceUpdatedAt) p.sources.find(s => s.id === source.id)!.error = '同期待ちのタスクに外部変更があります。差分を確認してください'; continue; }
-        if (prior) { t.version = prior.version + 1; if (prior.startedAt) { t.estimateAtStart = prior.estimateAtStart; t.startedAt = prior.startedAt; t.estimateOrigin = prior.estimateOrigin; } p.tasks[p.tasks.indexOf(prior)] = t; } else p.tasks.push(t);
+        if (prior) { t.version = prior.version + 1; if (prior.startedAt) { t.estimateAtStart = prior.estimateAtStart; t.startedAt = prior.startedAt; t.estimateOrigin = prior.estimateOrigin; } p.tasks[p.tasks.indexOf(prior)] = t; } else {if(t.state==='done'&&!t.startedAt)t.estimateOrigin='retrospective';p.tasks.push(t);}
       }
       for (const e of input.events ?? []) { p.events = p.events.filter(v => !(v.id === e.id && v.calendarId === e.calendarId)); p.events.push(e); }
       for (const log of input.worklogs ?? []) { if (!p.worklogs.some(l => l.id === log.id)) p.worklogs.push({ ...log, synced: true }); }

@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
 import { getChatGPTUser } from '@/app/chatgpt-auth';
-import { emptyPlan, planSchema, projectSchema, settingsSchema, projectPlan, canEdit, calendarPayload, fingerprint, type Plan, type PlanResponse } from './domain';
+import { emptyPlan, planSchema, projectSchema, settingsSchema, projectPlan, canEdit, calendarPayload, fingerprint, blankProject, blankMilestone, type Project, type Milestone, type Plan, type PlanResponse } from './domain';
 import { samplePlan } from './sample';
 import { z } from 'zod';
-import { applyPlanningAction, planningActionSchema, metrics, jstToday, shiftDay } from './planning';
+import { applyPlanningAction, planningActionSchema, metrics, jstToday, shiftDay, eventDay } from './planning';
 
 export class AppError extends Error { constructor(message: string, public status = 400) { super(message); } }
 export function db() { if (!env.DB) throw new AppError('データベースが利用できません', 503); return env.DB; }
@@ -87,12 +87,13 @@ export async function mutatePlanning(raw: unknown) {
 }
 export async function dailyBrief() {
   const { planning, revision } = await readPlanning(); const today = jstToday(); const end = shiftDay(today, 6);
-  return { revision, today, tasks: planning.tasks.filter(t => !t.archived && !['done','cancelled'].includes(t.state) && (t.horizon !== 'later' || t.state === 'blocked' || [t.start,t.target,t.deadline.value,t.blocker.reviewOn].some(d => d && d <= end))), events: planning.events.filter(e => !e.cancelled && e.start.slice(0,10) >= today && e.start.slice(0,10) <= end), changes: planning.changes.filter(c => c.status === 'proposed'), pending: planning.operations.filter(o => o.state !== 'done'), sources: planning.sources, metrics: metrics(planning, shiftDay(today,-7),shiftDay(today,-1)), monday: new Date(today+'T00:00:00Z').getUTCDay() === 1, monthStart: today.endsWith('-01') };
+  return { revision, today, tasks: planning.tasks.filter(t => !t.archived && !['done','cancelled'].includes(t.state) && (t.horizon !== 'later' || t.state === 'blocked' || [t.start,t.target,t.deadline.value,t.blocker.reviewOn].some(d => d && d <= end))), events: planning.events.filter(e => !e.cancelled && eventDay(e.start) >= today && eventDay(e.start) <= end), changes: planning.changes.filter(c => c.status === 'proposed'), pending: planning.operations.filter(o => o.state !== 'done'), sources: planning.sources, metrics: metrics(planning, shiftDay(today,-7),shiftDay(today,-1)), monday: new Date(today+'T00:00:00Z').getUTCDay() === 1, monthStart: today.endsWith('-01') };
 }
 export async function calendarTargets() {
   const ctx = await ownerContext();
   const targets = ctx.plan.projects.filter(p => !p.archived).flatMap(p => p.milestones.filter(m => m.calendarSync).map(m => ({ projectId: p.id, milestoneId: m.id, title: m.title, precision: m.precision, eligible: m.precision === 'day', sample: p.sample })));
-  return { targets, links: (await db().prepare('SELECT calendar_id, milestone_id, event_id, updated_at FROM calendar_links').all()).results };
+  const taskTargets = ctx.plan.planning.tasks.filter(t=>!t.archived&&!['cancelled','done'].includes(t.state)).flatMap(t=>t.calendarKinds.map(kind=>({taskId:t.id,kind,title:t.title,eligible:kind==='target'?!!t.target:t.deadline.precision==='day'&&!!t.deadline.value,sample:t.sample})));
+  return { targets, taskTargets, links: (await db().prepare('SELECT calendar_id, milestone_id, event_id, updated_at FROM calendar_links').all()).results };
 }
 const syncInput = z.object({ projectId: z.string(), milestoneId: z.string(), calendarId: z.string().min(1).max(300) });
 export async function prepareCalendar(raw: unknown) {
@@ -100,17 +101,29 @@ export async function prepareCalendar(raw: unknown) {
   const project = ctx.plan.projects.find(p => p.id === input.projectId && !p.archived);
   const m = project?.milestones.find(m => m.id === input.milestoneId && m.calendarSync);
   if (!project || !m) throw new AppError('同期対象が見つかりません', 404);
+  return prepareCalendarFor(project,m,input.calendarId);
+}
+export async function prepareTaskCalendar(raw: unknown) {
+  const input=z.object({taskId:z.string(),kind:z.enum(['target','deadline']),calendarId:z.string().min(1).max(300)}).parse(raw);const ctx=await ownerContext();
+  const t=ctx.plan.planning.tasks.find(t=>t.id===input.taskId&&!t.archived&&!['cancelled','done'].includes(t.state));
+  if(!t||!t.calendarKinds.includes(input.kind))throw new AppError('同期対象が見つかりません',404);
+  const p={...blankProject(),id:'task:'+t.id,name:t.title,shortName:t.title,sample:t.sample};
+  const m={...blankMilestone('research'),id:'task:'+t.id+':'+input.kind,title:input.kind==='target'?'目標日':'正式締切',kind:input.kind,precision:input.kind==='target'?'day' as const:t.deadline.precision,start:input.kind==='target'?t.target:t.deadline.value,confirmed:input.kind==='deadline'&&t.deadline.confirmed,time:input.kind==='deadline'?t.deadline.time:'',timezone:t.deadline.timezone,sourceUrl:t.deadline.sourceUrl};
+  if(!m.start)throw new AppError('同期する日付がありません');
+  return prepareCalendarFor(p,m,input.calendarId);
+}
+async function prepareCalendarFor(project:Project,m:Milestone,calendarId:string) {
   if (project.sample) throw new AppError('仮データは同期できません。実際の計画として保存し直してください');
-  const id = await fingerprint([project.id, m.id, input.calendarId]);
+  const id = await fingerprint([project.id, m.id, calendarId]);
   const marker = `edu_planning:${id}`;
   const payload = calendarPayload(project, m, marker); const hash = await fingerprint(payload);
   const now = new Date().toISOString(); const lease = crypto.randomUUID();
-  await db().prepare('INSERT OR IGNORE INTO calendar_links (id, calendar_id, milestone_id, fingerprint, updated_at) VALUES (?, ?, ?, ?, ?)').bind(id, input.calendarId, m.id, '', now).run();
+  await db().prepare('INSERT OR IGNORE INTO calendar_links (id, calendar_id, milestone_id, fingerprint, updated_at) VALUES (?, ?, ?, ?, ?)').bind(id, calendarId, m.id, '', now).run();
   const prior = await db().prepare('SELECT * FROM calendar_links WHERE id = ?').bind(id).first<{ event_id: string | null; fingerprint: string; pending_fingerprint: string | null; lease_until: string | null }>();
   if (prior?.fingerprint === hash && prior.event_id && !prior.pending_fingerprint) return { action: 'unchanged', eventId: prior.event_id, marker };
   const acquired = await db().prepare('UPDATE calendar_links SET lease = ?, lease_until = ?, pending_fingerprint = ? WHERE id = ? AND (lease_until IS NULL OR lease_until < ?)').bind(lease, new Date(Date.now() + 5 * 60000).toISOString(), hash, id, now).run();
   if (!acquired.meta.changes) throw new AppError('別の同期が処理中です。5分後に登録状態を確認してください', 409);
-  return { action: prior?.event_id ? 'update' : 'search_before_create', recoveryRequired: !!prior?.pending_fingerprint, calendarId: input.calendarId, eventId: prior?.event_id, marker, payload, receipt: { id, lease, fingerprint: hash }, instructions: '必ず対象カレンダーでdescriptionのmarkerを完全一致で確認する。既存イベントは更新する。検索が失敗/不完全、または前回の作成結果が不明なら新規作成しない。start_localとend_localがあるときはtimezoneで解釈して時刻付き予定にする。日付のみなら終日（end_dateは排他的）。通知use_default:true、参加者なし。成功後にcalendar_recordでイベントIDを記録する。自動削除は行わない。' };
+  return { action: prior?.event_id ? 'update' : 'search_before_create', recoveryRequired: !!prior?.pending_fingerprint, calendarId, eventId: prior?.event_id, marker, payload, receipt: { id, lease, fingerprint: hash }, instructions: '必ず対象カレンダーでdescriptionのmarkerを完全一致で確認する。既存イベントは更新する。検索が失敗/不完全、または前回の作成結果が不明なら新規作成しない。start_localとend_localがあるときはtimezoneで解釈して時刻付き予定にする。日付のみなら終日（end_dateは排他的）。通知use_default:true、参加者なし。成功後にcalendar_recordでイベントIDを記録する。自動削除は行わない。' };
 }
 export async function recordCalendar(raw: unknown) {
   await ownerContext();

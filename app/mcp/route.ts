@@ -1,4 +1,4 @@
-import { readPlan, mutate, readHistory, calendarTargets, prepareCalendar, recordCalendar, readPlanning, mutatePlanning, dailyBrief } from '@/lib/store';
+import { readPlan, mutate, readHistory, calendarTargets, prepareCalendar, prepareTaskCalendar, recordCalendar, readPlanning, mutatePlanning, dailyBrief } from '@/lib/store';
 import { planningActionSchema, taskSchema, worklogSchema, changeSchema, planningSchema } from '@/lib/planning';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 export const dynamic = 'force-dynamic';
@@ -21,10 +21,12 @@ const tools = [
   { name: 'get_planning_schema', description: 'タスク、実施記録、計画変更、同期操作の入力仕様を取得。', inputSchema: object({}) },
   { name: 'planning_mutate', description: '所有者専用。actionはconfigure/queue_task/record_worklog/propose_changes/review_changes/ingest_snapshot/sync_prepare/sync_record。まずget_planning_schemaを取得。GitHub等への実操作は接続ツールで行い、確認後にsync_record。推測した変更案は採用前に実行しない。外部取得は全ページを確認し失敗を空データとして保存しない。', inputSchema: object({ revision: rev, input: { type: 'object' } }, ['revision', 'input']) },
   { name: 'daily_brief', description: '所有者専用。今日と今週の予定・タスク、準備開始、待ち、変更案、失敗、前週の実績を取得。毎朝の通知向け。', inputSchema: object({}) },
+  { name: 'task_calendar_prepare', description: '所有者専用。選択したタスクの目標日または正式締切をCalendarへ反映する準備。外部操作後はcalendar_record。', inputSchema: object({ taskId:str, kind:{type:'string',enum:['target','deadline']}, calendarId:str },['taskId','kind','calendarId']) },
 ];
 export async function POST(request: Request) {
   let id: unknown = null;
   try {
+    const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)return Response.json({error:'この送信元からは更新できません'},{status:403});
     const raw = await request.text(); if (raw.length > 1500000) throw new Error('入力が大きすぎます');
     const body = JSON.parse(raw); id = body.id ?? null;
     let result: unknown;
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
         else if (name === 'get_task') { const d = await readPlanning(); const task = d.planning.tasks.find(t => t.id === args.taskId); if (!task) throw new Error('タスクが見つかりません'); value = { task, revision: d.revision, worklogs: d.planning.worklogs.filter(l => l.taskId === task.id), changes: d.planning.changes.filter(c => c.taskId === task.id) }; }
         else if (name === 'planning_mutate') value = await mutatePlanning({ ...args.input, revision: args.revision });
         else if (name === 'daily_brief') value = await dailyBrief();
+        else if (name === 'task_calendar_prepare') value = await prepareTaskCalendar(args);
         else if (name === 'get_planning_schema') value = { task: zodToJsonSchema(taskSchema), worklog: zodToJsonSchema(worklogSchema), change: zodToJsonSchema(changeSchema), action: zodToJsonSchema(planningActionSchema), planning: zodToJsonSchema(planningSchema) };
         else if (name === 'get_schema') { const { zodToJsonSchema } = await import('zod-to-json-schema'); const { projectSchema } = await import('@/lib/domain'); value = zodToJsonSchema(projectSchema); }
         else throw new Error('不明な操作です');

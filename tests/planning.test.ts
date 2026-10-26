@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPlanningAction as apply, blankTask, taskSchema, emptyPlanning, worklogSchema, changeSchema, metrics, horizonEnd, inHorizon, shiftMonth, taskBody, worklogBody } from '../lib/planning';
+import { applyPlanningAction as apply, blankTask, taskSchema, emptyPlanning, worklogSchema, changeSchema, metrics, horizonEnd, inHorizon, shiftMonth, taskBody, worklogBody, eventDay } from '../lib/planning';
 import { emptyPlan, projectPlan, planSchema } from '../lib/domain';
 const now = '2026-10-26T00:00:00.000Z';
 function fixture() { const p = emptyPlanning(); p.config.privateRepository = 'example/private_task'; p.tasks = [taskSchema.parse({ ...blankTask(), id: 't', title: '比較結果を整理する', repository: p.config.privateRepository, issueId: 'I_1', issueNumber: 1, sourceUpdatedAt: now, estimate: 3 })]; return p; }
@@ -86,4 +86,22 @@ test('metrics exclude parent, cancelled, retrospective; preserve separate scales
     { ...p.tasks[0], id: 'other', scale: 'team-b', state: 'done', estimateAtStart: 8, completedAt: now },
   ]; const m = metrics(p, '2026-10-26', '2026-11-01');
   assert.equal(m.actualMinutes, null); assert.equal(m.scales.find(s => s.scale === 'personal')!.completed, 3); assert.equal(m.scales.find(s => s.scale === 'team-b')!.completed, 8);
+});
+test('unchanged refresh preserves proposal versions; calendar UTC midnight is interpreted in Japan',()=>{
+ const p=fixture();p.tasks[0].version=3;
+ const refreshed=apply(p,{action:'ingest_snapshot',source:{id:'gh',kind:'github',title:'GitHub',status:'ok',checkedAt:now,lastSuccessAt:null,count:1,error:''},tasks:[p.tasks[0]]},now).planning;
+ assert.equal(refreshed.tasks[0].version,3);assert.equal(eventDay('2026-10-26T20:00:00Z'),'2026-10-27');
+});
+test('Trello complete queues only personal task state, archive does not complete and deadline stays fixed',()=>{
+ const p=fixture();p.tasks[0].trelloSelected=true;p.tasks[0].trelloCardId='card';p.tasks[0].deadline={...p.tasks[0].deadline,value:'2027-04-01',precision:'day'};
+ const input={action:'ingest_trello' as const,taskId:'t',baseVersion:0,cardId:'card',cardUrl:'https://trello.com/c/example',complete:true,archived:false,horizon:'week' as const,state:'todo' as const,target:'2026-11-01'};
+ const next=apply(p,input,now).planning;assert.equal(next.tasks[0].state,'todo');assert.equal(next.operations[0].desired!.state,'done');assert.equal(next.operations[0].desired!.deadline.value,'2027-04-01');
+ assert.equal(apply(p,{...input,archived:true},now).planning.operations.length,0);
+ p.tasks[0].repository='someone/research';assert.throws(()=>apply(p,input,now),/参照専用/);
+});
+test('closing waits for worklog and mismatching readback cannot claim success',()=>{
+ let p=fixture();p=apply(p,{action:'record_worklog',worklog:log(true)},now).planning;const close=p.operations.find(o=>o.kind==='update_task')!;
+ assert.throws(()=>apply(p,{action:'sync_prepare',operationId:close.id},now),/実施記録/);
+ p=fixture();p=apply(p,{action:'queue_task',task:{...p.tasks[0],state:'doing'},reason:'開始'},now).planning;p=apply(p,{action:'sync_prepare',operationId:p.operations[0].id},now).planning;
+ assert.throws(()=>apply(p,{action:'sync_record',operationId:p.operations[0].id,lease:p.operations[0].lease,status:'done',remoteId:'I_1',error:'',task:p.tasks[0]},now),/一致しません/);
 });

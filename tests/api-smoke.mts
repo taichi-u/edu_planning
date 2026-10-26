@@ -1,7 +1,8 @@
 // Integration tests target only the disposable local Worker DB. Never run against a hosted Site.
 import assert from 'node:assert/strict';
 import { blankProject, blankMilestone } from '../lib/domain';
-const base='http://127.0.0.1:8787';
+const base=process.env.TEST_BASE_URL || 'http://127.0.0.1:8787';
+if(!/^http:\/\/127\.0\.0\.1:(5173|8787)$/.test(base))throw new Error('Local QA only');
 const owner={'oai-authenticated-user-id':'local_seedy','oai-authenticated-user-email':'seedy@sites.test'};
 const viewer={'oai-authenticated-user-id':'qa-advisor','oai-authenticated-user-email':'advisor@example.org'};
 async function request(path:string,body?:unknown,identity=owner) {const r=await fetch(base+path,{method:body?'POST':'GET',headers:{...identity,'Content-Type':'application/json',Origin:base},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json() as any};}
