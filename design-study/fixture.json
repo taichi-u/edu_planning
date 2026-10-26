@@ -1,0 +1,42 @@
+{
+  "sample": true,
+  "anchor": "2027-06-07",
+  "weekEnd": "2027-06-13",
+  "quarterEnd": "2027-09-06",
+  "projects": [
+    {"id":"research","ja":"軌道設計と誘導制御","en":"Trajectory design and guidance","color":"#2469A5"},
+    {"id":"paper","ja":"論文","en":"Publications","color":"#B74D26"},
+    {"id":"conference","ja":"学会","en":"Conferences","color":"#137A65"},
+    {"id":"course","ja":"授業","en":"Coursework","color":"#665397"},
+    {"id":"funding","ja":"資金申請","en":"Funding applications","color":"#845382"},
+    {"id":"visit","ja":"研究滞在","en":"Research visits","color":"#947111"}
+  ],
+  "tasks": [
+    {"id":"t1","project":"research","ja":"比較実験の条件を確定","en":"Finalize comparison conditions","date":"2027-06-08","kind":"target","state":"doing","estimate":3,"start":"2027-06-07","end":"2027-06-09"},
+    {"id":"t2","project":"paper","ja":"論文Aの図表を更新","en":"Update figures for Paper A","date":"2027-06-10","kind":"target","state":"todo","estimate":5,"start":"2027-06-07","end":"2027-06-11"},
+    {"id":"t3","project":"course","ja":"最適制御レポートを提出","en":"Submit optimal control report","date":"2027-06-11","kind":"deadline","state":"todo","estimate":2,"start":"2027-06-08","end":"2027-06-11"},
+    {"id":"t4","project":"funding","ja":"奨学金Aの申請書を準備","en":"Prepare Fellowship A application","date":"2027-07-15","kind":"deadline","state":"blocked","estimate":null,"start":"2027-06-09","end":"2027-07-15","blockerJa":"推薦書の返答待ち","blockerEn":"Awaiting reference letter","review":"2027-06-11"},
+    {"id":"t5","project":"conference","ja":"国際学会Aの発表構成を検討","en":"Outline Conference A presentation","date":"2027-08-02","kind":"target","state":"todo","estimate":3,"start":"2027-06-12","end":"2027-08-02"},
+    {"id":"t6","project":"visit","ja":"研究滞在の候補先を整理","en":"Review research visit options","date":"","kind":"target","state":"todo","estimate":null,"start":"","end":""}
+  ],
+  "events": [
+    {"id":"e1","ja":"研究打ち合わせ","en":"Research meeting","date":"2027-06-07","time":"10:00–11:00"},
+    {"id":"e2","ja":"進捗確認","en":"Progress review","date":"2027-06-10","time":"15:00–15:30"}
+  ],
+  "periods": [
+    {"project":"research","ja":"基礎検討","en":"Initial studies","start":"2026-04-01","end":"2027-03-31"},
+    {"project":"research","ja":"ロバスト軌道設計","en":"Robust trajectory design","start":"2027-04-01","end":"2029-03-31"},
+    {"project":"research","ja":"統合検証","en":"Integrated validation","start":"2029-04-01","end":"2031-03-31"},
+    {"project":"paper","ja":"学位論文","en":"Dissertation","start":"2031-04-01","end":"2032-03-31"},
+    {"project":"course","ja":"最適制御","en":"Optimal control","start":"2027-04-01","end":"2027-07-31"},
+    {"project":"visit","ja":"海外研究滞在A（予定）","en":"Research visit A (tentative)","start":"2029-10-01","end":"2030-03-31","tentative":true}
+  ],
+  "milestones": [
+    {"project":"paper","ja":"論文A","en":"Paper A","date":"2027-06-30","kind":"target"},
+    {"project":"paper","ja":"論文B","en":"Paper B","date":"2029-06-01","kind":"target"},
+    {"project":"paper","ja":"論文C","en":"Paper C","date":"2031-09-01","kind":"target"},
+    {"project":"conference","ja":"国際学会A","en":"Conference A","date":"2027-08-16","end":"2027-08-20","kind":"event"},
+    {"project":"funding","ja":"奨学金A","en":"Fellowship A","date":"2027-07-15","kind":"deadline"}
+  ],
+  "log": {"ja":"比較条件と評価指標を整理した。次回は初期値への依存を確認する。","en":"Documented comparison conditions and metrics. Next: check sensitivity to initial values.","actualMinutes":null,"githubPending":true}
+}
