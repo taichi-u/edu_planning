@@ -70,6 +70,9 @@ export function metrics(p: Planning, from: string, to: string) {
   const minutes = p.worklogs.filter(l => l.synced && l.actualMinutes !== null && jstToday(new Date(l.at)) >= from && jstToday(new Date(l.at)) <= to);
   return { completedCount: completed.length, wip: leaf.filter(t => ['doing', 'blocked'].includes(t.state)).length, actualMinutes: minutes.length ? minutes.reduce((n, l) => n + l.actualMinutes!, 0) : null, scales: scopes.map(scale => ({ scale, planned: leaf.filter(t => t.scale === scale && t.estimateOrigin === 'planned' && t.target >= from && t.target <= to && t.state !== 'cancelled').reduce((n, t) => n + (t.estimateAtStart ?? t.estimate ?? 0), 0), completed: completed.filter(t => t.scale === scale && t.estimateOrigin === 'planned').reduce((n, t) => n + (t.estimateAtStart ?? 0), 0) })) };
 }
+const snapshotWindow = z.object({ calendarId: id, start: date, end: date }).refine(v=>!!v.start&&!!v.end&&v.start<=v.end,'取得期間を確認してください');
+export const snapshotSchema = z.object({ source: sourceSchema, tasks: z.array(taskSchema).optional(), events: z.array(calendarEventSchema).optional(), worklogs: z.array(worklogSchema).optional(), window: snapshotWindow.optional() });
+export const snapshotBundleSchema = z.object({ snapshots: z.array(snapshotSchema).min(1).max(50) });
 
 export const planningActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('configure'), config: configSchema }),
@@ -77,13 +80,15 @@ export const planningActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('record_worklog'), worklog: worklogSchema }),
   z.object({ action: z.literal('propose_changes'), changes: z.array(changeSchema).min(1).max(30) }),
   z.object({ action: z.literal('review_changes'), accepted: z.array(id), rejected: z.array(id) }),
-  z.object({ action: z.literal('ingest_snapshot'), source: sourceSchema, tasks: z.array(taskSchema).optional(), events: z.array(calendarEventSchema).optional(), worklogs: z.array(worklogSchema).optional() }),
+  z.object({ action: z.literal('ingest_snapshot'), source: sourceSchema, tasks: z.array(taskSchema).optional(), events: z.array(calendarEventSchema).optional(), worklogs: z.array(worklogSchema).optional(), window: snapshotWindow.optional() }),
+  z.object({ action: z.literal('ingest_bundle'), snapshots: z.array(snapshotSchema).min(1).max(50) }),
   z.object({ action: z.literal('sync_prepare'), operationId: id }),
   z.object({ action: z.literal('ingest_trello'), taskId: id, baseVersion: z.number().int(), cardId: id, cardUrl: link, complete: z.boolean(), archived: z.boolean(), horizon: z.enum(['today', 'week', 'later']), state: z.enum(['todo', 'doing', 'blocked']), target: date }),
   z.object({ action: z.literal('sync_record'), operationId: id, lease: id, status: z.enum(['done', 'failed', 'uncertain']), remoteId: z.string().max(300).default(''), task: taskSchema.optional(), error: text.default('') }),
 ]);
 export type PlanningAction = z.infer<typeof planningActionSchema>;
 export function applyPlanningAction(current: Planning, input: PlanningAction, now = new Date().toISOString()): { planning: Planning; result: unknown; summary: string } {
+  if(input.action==='ingest_bundle') { let planning=structuredClone(current);for(const snapshot of input.snapshots)planning=applyPlanningAction(planning,{action:'ingest_snapshot',...snapshot},now).planning;return {planning,result:{saved:true,count:input.snapshots.length},summary:'確認した取得結果を取り込み'}; }
   const p = structuredClone(current); let result: unknown = { saved: true }; let summary = input.action as string;
   function find(id: string) { const t = p.tasks.find(t => t.id === id); if (!t) throw new Error('タスクが見つかりません'); return t; }
   function queue(desired: Task, changeId = '') {
@@ -134,6 +139,7 @@ export function applyPlanningAction(current: Planning, input: PlanningAction, no
         if (prior && pendingFor(p, t.id)) { if (t.sourceUpdatedAt !== prior.sourceUpdatedAt) p.sources.find(s => s.id === source.id)!.error = '同期待ちのタスクに外部変更があります。差分を確認してください'; continue; }
         if (prior) { t.version = prior.version + 1; if (prior.startedAt) { t.estimateAtStart = prior.estimateAtStart; t.startedAt = prior.startedAt; t.estimateOrigin = prior.estimateOrigin; } p.tasks[p.tasks.indexOf(prior)] = t; } else {if(t.state==='done'&&!t.startedAt)t.estimateOrigin='retrospective';p.tasks.push(t);}
       }
+      if(source.status==='ok'&&input.events&&input.window) { const w=input.window,ids=new Set(input.events.filter(e=>e.calendarId===w.calendarId).map(e=>e.id));p.events=p.events.filter(e=>e.calendarId!==w.calendarId||eventDay(e.start)>w.end||eventDay(e.end)<w.start||ids.has(e.id)); }
       for (const e of input.events ?? []) { p.events = p.events.filter(v => !(v.id === e.id && v.calendarId === e.calendarId)); p.events.push(e); }
       for (const log of input.worklogs ?? []) { if (!p.worklogs.some(l => l.id === log.id)) p.worklogs.push({ ...log, synced: true }); }
     }
@@ -164,7 +170,17 @@ export function applyPlanningAction(current: Planning, input: PlanningAction, no
     const op = p.operations.find(o => o.id === input.operationId); if (!op || op.lease !== input.lease || op.state !== 'running' || op.leaseUntil < now) throw new Error('同期の確認情報が古くなっています');
     if (input.status === 'done') {
       if (!input.remoteId) throw new Error('外部IDが必要です');
-      if (op.kind === 'worklog') { const log = p.worklogs.find(l => l.id === op.worklogId)!; log.synced = true; log.githubCommentId = input.remoteId; }
+      if (op.kind === 'worklog') {
+        const log = p.worklogs.find(l => l.id === op.worklogId)!; log.synced = true; log.githubCommentId = input.remoteId;
+        // GitHub advances Issue.updated_at when a comment is added. Rebase only
+        // when readback proves that the task itself did not change.
+        const t = find(op.taskId), readback = input.task;
+        const comparable = (task: Task) => JSON.stringify({ ...taskSchema.parse(task), version: 0, sourceUpdatedAt: null });
+        if (readback?.sourceUpdatedAt && (!t.sourceUpdatedAt || readback.sourceUpdatedAt >= t.sourceUpdatedAt) && comparable(t) === comparable(readback)) {
+          const before = t.sourceUpdatedAt; t.sourceUpdatedAt = readback.sourceUpdatedAt;
+          for (const pending of p.operations.filter(v => v.taskId === t.id && v.kind === 'update_task' && v.state === 'pending' && v.baseVersion === t.version && v.baseSourceUpdatedAt === before)) pending.baseSourceUpdatedAt = t.sourceUpdatedAt;
+        }
+      }
       else if (op.provider === 'trello') { const t = find(op.taskId); if (t.version !== op.baseVersion) throw new Error('正本が変更されています。最新内容でカードを確認してください'); t.trelloCardId = input.remoteId; t.trelloUrl = input.task?.trelloUrl || t.trelloUrl; }
       else {
         if (!input.task || !input.task.issueId || !input.task.sourceUpdatedAt || input.task.id !== op.taskId || input.task.repository.toLowerCase() !== p.config.privateRepository.toLowerCase()) throw new Error('GitHubから再取得したIssueが必要です');

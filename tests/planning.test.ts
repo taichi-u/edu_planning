@@ -105,3 +105,33 @@ test('closing waits for worklog and mismatching readback cannot claim success',(
  p=fixture();p=apply(p,{action:'queue_task',task:{...p.tasks[0],state:'doing'},reason:'開始'},now).planning;p=apply(p,{action:'sync_prepare',operationId:p.operations[0].id},now).planning;
  assert.throws(()=>apply(p,{action:'sync_record',operationId:p.operations[0].id,lease:p.operations[0].lease,status:'done',remoteId:'I_1',error:'',task:p.tasks[0]},now),/一致しません/);
 });
+test('snapshot bundle imports all sources together and preserves original on invalid later snapshot',()=>{
+ const p=fixture(),source={id:'gh',kind:'github' as const,title:'GitHub',status:'ok' as const,checkedAt:now,lastSuccessAt:null,count:1,error:''};
+ const q=apply(p,{action:'ingest_bundle',snapshots:[{source,tasks:[{...p.tasks[0],id:'extra'}]},{source:{...source,id:'offline',status:'offline'},tasks:[]}]},now).planning;
+ assert.equal(q.tasks.length,2);assert.equal(q.sources.length,2);assert.equal(p.tasks.length,1);
+ const invalid={...p.tasks[0],id:'invalid',parentId:'invalid'};
+ assert.throws(()=>apply(p,{action:'ingest_bundle',snapshots:[{source,tasks:[{...p.tasks[0],id:'extra'}]},{source:{...source,id:'bad'},tasks:[invalid]}]},now));
+ assert.equal(p.tasks.length,1);
+});
+test('complete calendar window removes cancelled/missing occurrences, partial/error never erase cached events',()=>{
+ const p=fixture();p.events=[{id:'cancelled-instance',calendarId:'primary',title:'旧予定',start:'2026-10-27',end:'2026-10-28',url:'',cancelled:false,projectIds:[]},{id:'outside',calendarId:'primary',title:'期間外',start:'2027-01-01',end:'2027-01-02',url:'',cancelled:false,projectIds:[]}];
+ const a={action:'ingest_snapshot' as const,source:{id:'cal',kind:'calendar' as const,title:'Calendar',status:'ok' as const,checkedAt:now,lastSuccessAt:null,count:0,error:''},window:{calendarId:'primary',start:'2026-10-26',end:'2026-11-01'},events:[]};
+ assert.deepEqual(apply(p,a,now).planning.events.map(e=>e.id),['outside']);
+ assert.equal(apply(p,{...a,source:{...a.source,status:'partial'}},now).planning.events.length,2);
+ assert.equal(apply(p,{...a,source:{...a.source,status:'error'}},now).planning.events.length,2);
+});
+
+test('comment readback advances queued close timestamp only when task content is unchanged', () => {
+  const recorded=apply(fixture(),{action:'record_worklog',worklog:log(true)},now).planning;
+  const work=recorded.operations.find(o=>o.kind==='worklog')!, close=recorded.operations.find(o=>o.kind==='update_task')!;
+  const prepared=apply(recorded,{action:'sync_prepare',operationId:work.id},now).planning;
+  const lease=prepared.operations.find(o=>o.id===work.id)!.lease, later='2026-10-26T00:01:00.000Z';
+  const synced=apply(prepared,{action:'sync_record',operationId:work.id,lease,status:'done',remoteId:'comment-1',error:'',task:{...prepared.tasks[0],sourceUpdatedAt:later}},now).planning;
+  assert.equal(synced.tasks[0].sourceUpdatedAt,later);
+  assert.equal(synced.operations.find(o=>o.id===close.id)!.baseSourceUpdatedAt,later);
+  assert.doesNotThrow(()=>apply(synced,{action:'sync_prepare',operationId:close.id},now));
+  const conflict=apply(prepared,{action:'sync_record',operationId:work.id,lease,status:'done',remoteId:'comment-1',error:'',task:{...prepared.tasks[0],title:'別の編集',sourceUpdatedAt:later}},now).planning;
+  assert.equal(conflict.tasks[0].sourceUpdatedAt,now);
+  assert.equal(conflict.tasks[0].title,fixture().tasks[0].title);
+  assert.equal(conflict.worklogs[0].synced,true);
+});
