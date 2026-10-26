@@ -1,9 +1,10 @@
 import { type Plan, type Project, type Milestone } from './domain';
+import { emptyPlanning } from './planning';
 
 // Fictional planning data only. None of these dates are official announcements.
 const m = (id: string, title: string, category: Milestone['category'], kind: Milestone['kind'], start: string, end = '', extra: Partial<Milestone> = {}): Milestone => ({ id, title, publicTitle: title, category, kind, start, end, precision: start ? 'day' : 'unknown', time: '', timezone: 'Asia/Tokyo', confirmed: false, done: false, important: true, shared: true, calendarSync: false, sourceUrl: '', checkedAt: '', ...extra });
 const p = (id: string, name: string, category: Project['category'], milestones: Milestone[], extra: Partial<Project> = {}): Project => ({ id, name, shortName: name, publicName: name, category, theme: '', notes: '', stage: '準備中', links: [], shareable: true, viewerEmails: [], archived: false, sample: true, milestones, ...extra });
-export function samplePlan(): Plan { return { settings: { b4Start: '2026-04-01', phdStart: '2027-04-01' }, projects: [
+export function samplePlan(): Plan { return { planning: emptyPlanning(), settings: { b4Start: '2026-04-01', phdStart: '2027-04-01' }, projects: [
   p('theme-a', 'テーマA：軌道と制御', 'research', [m('a-base','基礎研究','research','period','2026-04-01','2027-03-31'),m('a-main','テーマA','research','period','2027-04-01','2029-09-30'),m('a-check','実験条件の整理','research','target','2026-11-05', '', {important:false})], { shareable:false, theme:'軌道計画と制御の基礎検討', stage:'実施中' }),
   p('theme-b', 'テーマB', 'research', [m('b-main','テーマB','research','period','2029-10-01','2032-03-31')], {shareable:false}),
   p('paper-1', '論文1', 'paper', [m('p1-writing','論文1・執筆','paper','period','2026-12-01','2027-04-30'),m('p1-target','論文1・投稿目標','paper','target','2027-05-01'),m('p1-review','査読・改稿','paper','period','2027-05-02','2028-02-28')], {stage:'執筆中',theme:'テーマA',notes:'投稿先は未決定。日程は仮案。'}),

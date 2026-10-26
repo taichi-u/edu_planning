@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { planningSchema, emptyPlanning } from './planning';
 
 export const categories = [
   { id: 'research', label: '研究', color: '#0072B2' },
@@ -34,24 +35,24 @@ export const projectSchema = z.object({
   category, theme: z.string().max(300), notes: z.string().max(5000), stage: z.enum(stages),
   links: z.array(z.object({ label: z.string().max(100), url })).max(20),
   shareable: z.boolean(), viewerEmails: z.array(z.string().email().transform(v => v.toLowerCase().trim())).max(30),
-  archived: z.boolean(), sample: z.boolean(), milestones: z.array(milestoneSchema).max(80),
+  archived: z.boolean(), sample: z.boolean(), milestones: z.array(milestoneSchema).max(80), relatedProjectIds: z.array(z.string()).optional(),
 }).superRefine((p, ctx) => {
   if (new Set(p.milestones.map(m => m.id)).size !== p.milestones.length) ctx.addIssue({ code: 'custom', message: '節目IDが重複しています' });
   if (p.shareable && (!p.publicName || p.milestones.some(m => m.shared && !m.publicTitle))) ctx.addIssue({ code: 'custom', message: '共有用名称を入力してください' });
 });
 export const settingsSchema = z.object({ b4Start: z.string().refine(validDay), phdStart: z.string().refine(validDay) }).refine(v => v.phdStart > v.b4Start, '博士課程の開始日はB4開始日より後にしてください');
-export const planSchema = z.object({ settings: settingsSchema, projects: z.array(projectSchema).max(300) });
+export const planSchema = z.object({ settings: settingsSchema, projects: z.array(projectSchema).max(300), planning: planningSchema });
 export type Milestone = z.infer<typeof milestoneSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Plan = z.infer<typeof planSchema>;
 export type Category = Project['category'];
 export type PlanResponse = { plan: Plan; revision: number; role: 'owner' | 'viewer' | 'uninitialized' | 'anonymous'; email: string; initialized: boolean; meeting: boolean };
-export const emptyPlan = (): Plan => ({ settings: { b4Start: '2026-04-01', phdStart: '2027-04-01' }, projects: [] });
+export const emptyPlan = (): Plan => ({ settings: { b4Start: '2026-04-01', phdStart: '2027-04-01' }, projects: [], planning: emptyPlanning() });
 export function canEdit(ownerId: string, userId: string | null) { return !!userId && ownerId === userId; }
 export function projectPlan(plan: Plan, owner: boolean, email: string, meeting: boolean): Plan {
   if (owner && !meeting) return structuredClone(plan);
-  return { settings: plan.settings, projects: plan.projects.filter(p => !p.archived && p.shareable && (owner || p.viewerEmails.includes(email.toLowerCase()))).map(p => ({
-    ...p, name: p.publicName, shortName: p.publicName, theme: '', notes: '', links: [], viewerEmails: [],
+  return { settings: plan.settings, planning: emptyPlanning(), projects: plan.projects.filter(p => !p.archived && p.shareable && (owner || p.viewerEmails.includes(email.toLowerCase()))).map(p => ({
+    ...p, name: p.publicName, shortName: p.publicName, theme: '', notes: '', links: [], viewerEmails: [], relatedProjectIds: [],
     milestones: p.milestones.filter(m => m.shared && (!meeting || m.category !== 'research')).map(m => ({ ...m, title: m.publicTitle, sourceUrl: '', checkedAt: '', calendarSync: false })),
   })).filter(p => p.milestones.length > 0) };
 }

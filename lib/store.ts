@@ -3,6 +3,7 @@ import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { emptyPlan, planSchema, projectSchema, settingsSchema, projectPlan, canEdit, calendarPayload, fingerprint, type Plan, type PlanResponse } from './domain';
 import { samplePlan } from './sample';
 import { z } from 'zod';
+import { applyPlanningAction, planningActionSchema, metrics, jstToday, shiftDay } from './planning';
 
 export class AppError extends Error { constructor(message: string, public status = 400) { super(message); } }
 export function db() { if (!env.DB) throw new AppError('データベースが利用できません', 503); return env.DB; }
@@ -29,7 +30,9 @@ export async function mutate(raw: unknown) {
   const input = mutation.parse(raw);
   if (input.action === 'initialize') {
     const user = await getChatGPTUser(); if (!user) throw new AppError('ログインが必要です', 401);
-    // Site must remain owner-private until initialized. The unique singleton prevents a second owner.
+    const expected = env.PLANNING_OWNER_EMAIL?.trim().toLowerCase();
+    if (!expected || user.email.toLowerCase() !== expected) throw new AppError('サーバーで指定された所有者だけが初期化できます', 403);
+    // The configured owner email gates the first write even on a public Site.
     const plan = input.sample ? samplePlan() : emptyPlan(); planSchema.parse(plan);
     const now = new Date().toISOString();
     const result = await db().prepare('INSERT OR IGNORE INTO workspace (id, owner_id, body, revision, updated_at) VALUES (?, ?, ?, 1, ?)').bind('main', user.userId, JSON.stringify(plan), now).run();
@@ -61,6 +64,30 @@ export async function readHistory(projectId?: string) {
   await ownerContext();
   const query = projectId ? db().prepare('SELECT revision, action, project_id, created_at, summary FROM history WHERE project_id = ? ORDER BY revision DESC LIMIT 100').bind(projectId) : db().prepare('SELECT revision, action, project_id, created_at, summary FROM history ORDER BY revision DESC LIMIT 100');
   return (await query.all()).results;
+}
+export async function readPlanning() {
+  const ctx = await ownerContext();
+  return { planning: ctx.plan.planning, projects: ctx.plan.projects.filter(p => !p.archived).map(p => ({ id: p.id, name: p.shortName })), revision: ctx.row!.revision };
+}
+export async function mutatePlanning(raw: unknown) {
+  const { revision, ...body } = z.object({ revision: z.number().int().nonnegative() }).passthrough().parse(raw);
+  const input = planningActionSchema.parse(body); const ctx = await ownerContext();
+  if (ctx.row!.revision !== revision) throw new AppError('別の変更が保存されています。差分を確認してください', 409);
+  let applied;
+  try { applied = applyPlanningAction(ctx.plan.planning, input); } catch (e) { throw new AppError(e instanceof Error ? e.message : '更新できません', 409); }
+  const projectIds = new Set(ctx.plan.projects.map(p => p.id));
+  if (applied.planning.tasks.some(t => t.projectIds.some(id => !projectIds.has(id)))) throw new AppError('関連付け先の案件が見つかりません');
+  const plan = planSchema.parse({ ...ctx.plan, planning: applied.planning }); const now = new Date().toISOString();
+  const results = await db().batch([
+    db().prepare('INSERT INTO history (id, revision, actor_id, action, project_id, created_at, summary) SELECT ?, ?, ?, ?, NULL, ?, ? WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ? AND revision = ?)').bind(crypto.randomUUID(), revision + 1, ctx.user!.userId, input.action, now, applied.summary, 'main', revision),
+    db().prepare('UPDATE workspace SET body = ?, revision = ?, updated_at = ? WHERE id = ? AND revision = ?').bind(JSON.stringify(plan), revision + 1, now, 'main', revision),
+  ]);
+  if (!results[1].meta.changes) throw new AppError('同時編集を検出しました。差分を確認してください', 409);
+  return { planning: applied.planning, result: applied.result, revision: revision + 1 };
+}
+export async function dailyBrief() {
+  const { planning, revision } = await readPlanning(); const today = jstToday(); const end = shiftDay(today, 6);
+  return { revision, today, tasks: planning.tasks.filter(t => !t.archived && !['done','cancelled'].includes(t.state) && (t.horizon !== 'later' || t.state === 'blocked' || [t.start,t.target,t.deadline.value,t.blocker.reviewOn].some(d => d && d <= end))), events: planning.events.filter(e => !e.cancelled && e.start.slice(0,10) >= today && e.start.slice(0,10) <= end), changes: planning.changes.filter(c => c.status === 'proposed'), pending: planning.operations.filter(o => o.state !== 'done'), sources: planning.sources, metrics: metrics(planning, shiftDay(today,-7),shiftDay(today,-1)), monday: new Date(today+'T00:00:00Z').getUTCDay() === 1, monthStart: today.endsWith('-01') };
 }
 export async function calendarTargets() {
   const ctx = await ownerContext();
