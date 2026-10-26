@@ -1,0 +1,7 @@
+import fs from 'node:fs';import {scene} from '../scene.mjs';
+const fixture=JSON.parse(fs.readFileSync(new URL('../fixture.json',import.meta.url),'utf8'));
+export const scenes=[];for(const id of ['a','b','c'])for(const view of ['week','quarter','all'])for(const lang of ['ja','en'])scenes.push(scene(fixture,id,lang,view));
+export function foundationCode(){const colors=new Set(['#FFFFFF','#FBEDE7','#873B28','#D5DCE0']),spaces=new Set([0,4,5,6,8,10,12,14,15,16,18,22,24,28,32,44,48]),fonts=new Set();function collect(n){for(const k of ['bg','fg','color','line','muted'])if(typeof n[k]==='string'&&n[k].startsWith('#'))colors.add(n[k].toUpperCase());if(n.font)fonts.add(n.font);for(const k of ['gap','pad','padX','padTop'])if(n[k]!==undefined)spaces.add(n[k]);for(const c of n.children||[])collect(c);}scenes.forEach(collect);const data={scenes:scenes.map(({name,bg,themeId,lang,view})=>({name,bg,themeId,lang,view})),colors:[...colors],spaces:[...spaces],fonts:[...fonts]};return fs.readFileSync(new URL('./foundations.js',import.meta.url),'utf8').replace('__SCENES__',JSON.stringify(data));}
+export function viewCode(index,state){return fs.readFileSync(new URL('./build-view.js',import.meta.url),'utf8').replace('__SCENE__',JSON.stringify(scenes[index])).replace('__STATE__',JSON.stringify(state));}
+if(process.argv[2]==='foundations')process.stdout.write(foundationCode());
+if(process.argv[2]==='view')process.stdout.write(viewCode(Number(process.argv[3]),JSON.parse(fs.readFileSync(new URL('./state-foundations.json',import.meta.url),'utf8'))));

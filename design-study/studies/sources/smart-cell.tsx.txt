@@ -1,0 +1,92 @@
+import { type FC, memo, useMemo } from 'react'
+import { tv } from 'tailwind-variants'
+
+import { reelShadowClassNameGenerator } from './reelShadowStyle'
+
+import type { ExtendElementPropsWithRef } from '../../types'
+
+type CellContentWidth = number | string
+
+type Props = ExtendElementPropsWithRef<
+  'td',
+  {
+    /** テキストの水平方向の配置 */
+    align?: 'left' | 'right'
+    /** テキストの垂直方向の配置 */
+    vAlign?: 'middle' | 'baseline'
+    /** 値が空の場合にハイフンを表示するかどうか */
+    nullable?: boolean
+    /** 横スクロール時、カラムを左右いずれかに固定 */
+    fixed?: 'left' | 'right'
+    contentWidth?:
+      CellContentWidth | { base?: CellContentWidth; min?: CellContentWidth; max?: CellContentWidth }
+  }
+>
+
+export const Td: FC<Props> = memo(
+  ({ align, vAlign, nullable, fixed, contentWidth, className, style, children, ...rest }) => {
+    const actualClassName = useMemo(() => {
+      const base = classNameGenerator({ align, vAlign, nullable, className })
+
+      if (!fixed) {
+        return base
+      }
+
+      const shadow = reelShadowClassNameGenerator({ direction: fixed })
+
+      return `${base} ${shadow}`
+    }, [align, className, fixed, nullable, vAlign])
+    const actualStyle =
+      typeof contentWidth === 'object'
+        ? {
+            ...style,
+            width: convertContentWidth(contentWidth.base),
+            minWidth: convertContentWidth(contentWidth.min),
+            maxWidth: convertContentWidth(contentWidth.max),
+          }
+        : {
+            ...style,
+            width: convertContentWidth(contentWidth),
+          }
+
+    return (
+      <td {...rest} className={actualClassName} style={actualStyle} data-fixed={fixed}>
+        {children}
+      </td>
+    )
+  },
+)
+
+const classNameGenerator = tv({
+  base: [
+    'smarthr-ui-Td',
+    'shr-h-[calc(1em_*_theme(lineHeight.normal))] shr-border-0 shr-px-1 shr-py-0.5 shr-align-middle shr-text-base shr-leading-normal shr-text-black',
+    '[&.fixed]:shr-bg-white',
+  ],
+  variants: {
+    align: {
+      left: '',
+      right: 'shr-text-right',
+    } satisfies Record<NonNullable<Props['align']>, string>,
+    vAlign: {
+      middle: '',
+      baseline: 'shr-align-baseline',
+    } satisfies Record<NonNullable<Props['vAlign']>, string>,
+    nullable: {
+      true: "empty:after:shr-content-['-----']",
+    },
+  },
+  defaultVariants: {
+    align: 'left',
+    vAlign: 'middle',
+    nullable: false,
+  },
+})
+
+const convertContentWidth = (contentWidth?: CellContentWidth) => {
+  if (typeof contentWidth === 'number') {
+    return `${contentWidth}em`
+  }
+
+  return contentWidth
+}

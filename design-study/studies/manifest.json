@@ -1,0 +1,142 @@
+{
+  "checkedAt": "2026-10-26",
+  "scope": "Component sample reconstructions only. No brand assets. Source values, not pixel-perfect full-product copies.",
+  "sources": [
+    {
+      "id": "dads-license",
+      "path": "sources/dads-license.txt",
+      "sha": "879a934df6da1678dc72b095bc441f3bd6d1d157",
+      "url": "https://github.com/digital-go-jp/design-system-example-components-react/blob/main/LICENSE"
+    },
+    {
+      "id": "smart-license",
+      "path": "sources/smart-license.txt",
+      "sha": "a083544e9e3747a507e991af2e4d20c62d801db7",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/LICENSE"
+    },
+    {
+      "id": "primer-license",
+      "path": "sources/primer-license.txt",
+      "sha": "7a22bf3f7a261e32e9552915a45032fd8b2cc746",
+      "url": "https://github.com/primer/react/blob/main/LICENSE"
+    },
+    {
+      "id": "dads-story",
+      "path": "sources/dads-story.tsx.txt",
+      "sha": "6ce86ac634a0844eb55a99974cbc42f3eb2a62e7",
+      "url": "https://github.com/digital-go-jp/design-system-example-components-react/blob/main/src/components/Table/Table.stories.tsx"
+    },
+    {
+      "id": "smart-story",
+      "path": "sources/smart-story.tsx.txt",
+      "sha": "d6fad7aaf2d4214d84797fd909c657adb1925f99",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/packages/smarthr-ui/src/components/Table/stories/Table.stories.tsx"
+    },
+    {
+      "id": "smart-cell",
+      "path": "sources/smart-cell.tsx.txt",
+      "sha": "d89feb1864b2581620e5a967f622a898cd516d9c",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/packages/smarthr-ui/src/components/Table/Td.tsx"
+    },
+    {
+      "id": "smart-table",
+      "path": "sources/smart-table.tsx.txt",
+      "sha": "f9274f8d20a9588a4b2fed3c12082af6fa6b3893",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/packages/smarthr-ui/src/components/Table/ActualTable.tsx"
+    },
+    {
+      "id": "primer-css",
+      "path": "sources/primer-css.css.txt",
+      "sha": "c03d844fa3ef4f4f8cc3ae58aeb0fd40b2ca3250",
+      "url": "https://github.com/primer/react/blob/main/packages/react/src/DataTable/Table.module.css"
+    },
+    {
+      "id": "primer-story",
+      "path": "sources/primer-story.tsx.txt",
+      "sha": "5153622ff95793318f70803da00c974507eae4c2",
+      "url": "https://github.com/primer/react/blob/main/packages/react/src/DataTable/DataTable.stories.tsx"
+    },
+    {
+      "id": "smart-preset",
+      "path": "sources/smart-preset.ts.txt",
+      "sha": "3c6100420547ecf3007756883ecb27a1cd741f84",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/packages/smarthr-ui/src/smarthr-ui-preset.ts"
+    },
+    {
+      "id": "smart-font-size",
+      "path": "sources/smart-font-size.ts.txt",
+      "sha": "c45a2bb128d635318f7cd91b164d6396f621414c",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/packages/smarthr-ui/src/themes/createFontSize.ts"
+    },
+    {
+      "id": "smart-spacing",
+      "path": "sources/smart-spacing.ts.txt",
+      "sha": "e5b01c3b0f8c7682eba86b513d1573e84d57b581",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/packages/smarthr-ui/src/themes/createSpacing.ts"
+    },
+    {
+      "id": "smart-color",
+      "path": "sources/smart-color.ts.txt",
+      "sha": "190b5938fb29348c84f63c5c5e9ccd4d10d53a96",
+      "url": "https://github.com/kufu/smarthr-ui/blob/master/packages/smarthr-ui/src/themes/createColor.ts"
+    }
+  ],
+  "studies": [
+    {
+      "id": "dads",
+      "sample": "FirstRowAsHeaderCell",
+      "license": "MIT",
+      "expected": {
+        "fontSize": 16,
+        "lineHeight": 27.2,
+        "paddingBlock": 20,
+        "paddingInline": 16,
+        "borderWidth": 1
+      },
+      "limitations": [
+        "Official source code inspected; no screenshot pixel-diff against the live Storybook.",
+        "Color tokens approximated in study; typography and spacing derived from source."
+      ]
+    },
+    {
+      "id": "smart",
+      "sample": "Table/Playground",
+      "license": "MIT",
+      "expected": {
+        "fontSize": 16,
+        "lineHeight": 24,
+        "paddingBlock": 8,
+        "paddingInline": 16,
+        "borderWidth": 1
+      },
+      "limitations": [
+        "HTML reconstruction of OSS sample, without React package runtime.",
+        "Header padding/weight is an approximation; Th source path returned 404.",
+        "Default spacing calculated from createSpacing: 16px per char."
+      ]
+    },
+    {
+      "id": "primer",
+      "sample": "DataTable/Default (first 3 rows, text columns)",
+      "license": "MIT",
+      "expected": {
+        "fontSize": 12,
+        "lineHeight": 20,
+        "paddingBlock": 8,
+        "paddingInline": 12,
+        "borderWidth": 1
+      },
+      "limitations": [
+        "Feature labels, relative-time component, sorting and selection omitted.",
+        "Edge cells have 16px inline padding; interior cells 12px.",
+        "No screenshot pixel-diff against official Storybook."
+      ]
+    }
+  ],
+  "assets": {
+    "fonts": "Browser-hosted Google Fonts; no font files vendored. Embedded IBM Plex fonts in meeting PDF use OFL-1.1.",
+    "icons": "No third-party icons",
+    "logos": "None",
+    "figma": "No third-party design assets imported"
+  }
+}
