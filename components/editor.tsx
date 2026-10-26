@@ -1,17 +1,18 @@
 'use client';
 import { useState } from 'react';
 import { categories, kinds, stages, blankMilestone, projectSchema, type Project, type Milestone } from '@/lib/domain';
-export default function Editor({ project, onSave, busy }: { project: Project; onSave: (p: Project) => Promise<void>; busy: boolean }) {
+export default function Editor({ project, projects, onSave, busy }: { project: Project; projects: Project[]; onSave: (p: Project) => Promise<void>; busy: boolean }) {
   const [draft,setDraft]=useState<Project>(structuredClone(project)); const [error,setError]=useState(''); const [emailsText,setEmailsText]=useState(project.viewerEmails.join(', ')); const [linksText,setLinksText]=useState(project.links.map(l=>l.url).join('\n'));
   const patch=(value:Partial<Project>)=>setDraft(d=>({...d,...value}));
   const milestone=(id:string,value:Partial<Milestone>)=>setDraft(d=>({...d,milestones:d.milestones.map(m=>m.id===id?{...m,...value}:m)}));
-  async function submit(e:React.FormEvent) { e.preventDefault(); const result=projectSchema.safeParse({...draft,viewerEmails:emailsText.split(/[,\n]/).map(v=>v.trim()).filter(Boolean),links:linksText.split(/\n/).map(v=>v.trim()).filter(Boolean).map(url=>({label:'関連資料',url}))}); if(!result.success) {setError(result.error.issues.map(x=>x.message).join(' / '));return;} try{await onSave(result.data);}catch(e){setError(e instanceof Error?e.message:'保存に失敗しました');} }
+  async function submit(e:React.FormEvent) { e.preventDefault(); const result=projectSchema.safeParse({...draft,viewerEmails:emailsText.split(/[,\n]/).map(v=>v.trim()).filter(Boolean),links:linksText.split(/\n/).map(v=>v.trim()).filter(Boolean).map(url=>project.links.find(l=>l.url===url)||({label:'関連資料',url}))}); if(!result.success) {setError(result.error.issues.map(x=>x.message).join(' / '));return;} try{await onSave(result.data);}catch(e){setError(e instanceof Error?e.message:'保存に失敗しました');} }
   return <form onSubmit={submit} className="edit-form">
     <label>正式名称<input required value={draft.name} onChange={e=>patch({name:e.target.value})} maxLength={300}/></label>
     <div className="field-pair"><label>短縮表示名<input required value={draft.shortName} onChange={e=>patch({shortName:e.target.value})} maxLength={60}/></label><label>カテゴリー<select value={draft.category} onChange={e=>patch({category:e.target.value as Project['category']})}>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label></div>
     <label>研究テーマ<input value={draft.theme} onChange={e=>patch({theme:e.target.value})}/></label>
     <label>進行状態<select value={draft.stage} onChange={e=>patch({stage:e.target.value as Project['stage']})}>{stages.map(s=><option key={s}>{s}</option>)}</select></label>
     <label>メモ<textarea rows={3} value={draft.notes} onChange={e=>patch({notes:e.target.value})}/></label>
+    <fieldset><legend>関連プロジェクト</legend><div className="checks">{projects.filter(p=>p.id!==draft.id&&!p.archived).map(p=><label key={p.id}><input type="checkbox" checked={draft.relatedProjectIds?.includes(p.id)||false} onChange={e=>patch({relatedProjectIds:e.target.checked?[...(draft.relatedProjectIds||[]),p.id]:(draft.relatedProjectIds||[]).filter(id=>id!==p.id)})}/>{p.shortName}</label>)}</div></fieldset>
     <label>関連資料URL（1行に1件）<textarea rows={2} value={linksText} onChange={e=>setLinksText(e.target.value)}/></label>
     <div className="check-line"><label><input type="checkbox" checked={draft.sample} onChange={e=>patch({sample:e.target.checked})}/>仮データ</label><label><input type="checkbox" checked={draft.shareable} onChange={e=>patch({shareable:e.target.checked})}/>面談・閲覧共有の対象</label></div>
     {draft.shareable&&<fieldset><legend>共有</legend><label>共有用名称<input required value={draft.publicName} onChange={e=>patch({publicName:e.target.value})}/></label><label>閲覧者メール（カンマ区切り）<input value={emailsText} onChange={e=>setEmailsText(e.target.value)}/></label><p className="help">サイトの閲覧権限も別途必要です。共有画面には研究テーマ・メモ・関連資料を含めません。</p></fieldset>}
@@ -28,6 +29,6 @@ export default function Editor({ project, onSave, busy }: { project: Project; on
       <button type="button" className="text-button danger" onClick={()=>patch({milestones:draft.milestones.filter(v=>v.id!==m.id)})}>この節目を削除</button>
     </fieldset>)}
     {error&&<p className="error" role="alert">{error}</p>}
-    <button className="primary save-button" type="submit" disabled={busy}>{busy?'保存中…':'変更を保存'}</button>
+    <button className="primary save-button" type="submit" disabled={busy}>{busy?'保存中…':'保存'}</button>
   </form>;
 }

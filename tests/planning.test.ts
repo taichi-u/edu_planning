@@ -145,3 +145,18 @@ test('unassigned real tasks do not acquire a sample flag; derived dates never pe
   assert.equal(derived.projects[0].milestones.length,1);
   assert.equal(p.projects.length,0);
 });
+
+
+test('unestimated tasks have no point scale totals', () => {
+  const p=emptyPlanning();p.tasks=[blankTask()];
+  const result=metrics(p,'2026-10-26','2026-11-01');
+  assert.deepEqual(result.scales,[]);assert.equal(result.actualMinutes,null);
+});
+test('timeline can exclude repository references and calendar overlays without altering saved data', () => {
+  const p=emptyPlan();p.planning.config.privateRepository='example/private_task';
+  p.planning.tasks=[taskSchema.parse({...blankTask(),id:'personal',target:'2026-11-01'}),taskSchema.parse({...blankTask(),id:'ref',repository:'example/solver',target:'2026-11-02'})];
+  p.planning.events=[{id:'event',calendarId:'c',title:'Meeting',start:'2026-11-01',end:'2026-11-02',projectIds:[],url:'',cancelled:false}];
+  const original=structuredClone(p),derived=withTaskMarks(p,{references:false,calendar:false});
+  assert.deepEqual(derived.projects.flatMap(p=>p.milestones).map(m=>m.id),['task-target-personal']);
+  assert.deepEqual(p,original);assert.ok(withTaskMarks(p).projects.some(p=>p.id==='derived-calendar'));
+});

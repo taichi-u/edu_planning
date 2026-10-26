@@ -1,11 +1,11 @@
 import { blankMilestone, blankProject, type Plan, type Project } from './domain';
-import { shiftDay, eventDay } from './planning';
+import { shiftDay, eventDay, canWriteTask } from './planning';
 
 // Derived marks are never written back to project data or exported to viewers.
-export function withTaskMarks(plan: Plan): Plan {
+export function withTaskMarks(plan: Plan, options: { calendar?: boolean; references?: boolean } = {}): Plan {
   const projects = plan.projects.map(p => ({ ...p, milestones: [...p.milestones] }));
   let unassigned: Project | undefined;
-  for (const task of plan.planning.tasks.filter(t => !t.archived && t.state !== 'cancelled')) {
+  for (const task of plan.planning.tasks.filter(t => !t.archived && t.state !== 'cancelled' && (options.references !== false || canWriteTask(t, plan.planning.config)))) {
     let targets = projects.filter(p => task.projectIds.includes(p.id));
     if (!targets.length) { unassigned ??= { ...blankProject(), id: 'derived-unassigned', name: '未分類のタスク', shortName: '未分類', sample: false }; if (!projects.includes(unassigned)) projects.push(unassigned); targets = [unassigned]; }
     for (const p of targets) {
@@ -16,7 +16,7 @@ export function withTaskMarks(plan: Plan): Plan {
       if (task.deadline.value) p.milestones.push({ ...base, id: `task-deadline-${task.id}`, title: `${task.title}・正式締切`, kind: 'deadline', start: task.deadline.value, precision: task.deadline.precision, confirmed: task.deadline.confirmed, sourceUrl: task.deadline.sourceUrl, checkedAt: task.deadline.checkedAt, time: task.deadline.time, timezone: task.deadline.timezone });
     }
   }
-  if (plan.planning.events.some(e => !e.cancelled)) {
+  if (options.calendar !== false && plan.planning.events.some(e => !e.cancelled)) {
     const p: Project = { ...blankProject(), id: 'derived-calendar', name: 'カレンダーの予定', shortName: 'カレンダー', category: 'travel' };
     for (const e of plan.planning.events.filter(e => !e.cancelled)) { const start = eventDay(e.start), end = eventDay(e.end); p.milestones.push({ ...blankMilestone('travel'), id: `${e.calendarId}-${e.id}`, title: e.title, publicTitle: '', shared: false, kind: 'event', start, end: e.start.length === 10 && end > start ? shiftDay(end,-1) : end > start ? end : '', confirmed: true }); }
     projects.push(p);
