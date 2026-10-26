@@ -1,3 +1,4 @@
+import {projectColors} from './revised-colors.mjs';
 import {sampleForScenario,timePosition} from './model.mjs';
 const data=await (await fetch('fixture.json')).json();
 const query=new URLSearchParams(location.search);
@@ -10,6 +11,8 @@ const words={
 };
 const $=id=>document.getElementById(id),make=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 const w=()=>words[lang],projectFor=id=>fixture.projects.find(p=>p.id===id);
+const colorFor=id=>projectColors[id]||{color:'#0072B2',tint:'#E8F3FB'};
+const decorate=(element,id)=>{const c=colorFor(id);element.style.setProperty('--project-color',c.color);element.style.setProperty('--project-tint',c.tint);return element;};
 const stored=()=>JSON.parse(localStorage.getItem('edu-revised-records')||'{}');
 const date=s=>new Intl.DateTimeFormat(lang==='ja'?'ja-JP':'en-US',{month:lang==='ja'?'numeric':'short',day:'numeric',timeZone:'Asia/Tokyo'}).format(new Date(s+'T00:00:00Z'));
 function bounds(){return view==='all'?['2026-04-01','2034-04-01']:view==='quarter'?['2027-06-07','2027-09-07']:['2027-06-07','2027-06-14'];}
@@ -24,13 +27,13 @@ function plot(periods=[],points=[],long=false){
  for(const t of ticks()){const l=make('i',undefined,'gridline');l.style.left=position(t.date)+'%';e.append(l);}
  const [start,end]=bounds();
  for(const period of periods){if(period.start>=end||period.end<start)continue;const from=Math.max(0,position(period.start)),to=Math.min(100,position(period.end)+100/((Date.parse(end)-Date.parse(start))/86400000));const bar=make('span',undefined,'duration'+(period.tentative?' tentative':''));bar.style.left=from+'%';bar.style.width=(to-from)+'%';bar.title=period[lang]+' / '+period.start+' - '+period.end;bar.setAttribute('role','img');bar.setAttribute('aria-label',bar.title);if(long){bar.append(make('span',period[lang]));}e.append(bar);}
- for(const point of points){if(point.date<start||point.date>=end)continue;const m=make('span',undefined,'milestone '+point.kind);m.style.left=`calc(${position(point.date)}% - 4px)`;m.title=point[lang]+' / '+point.date+' / '+w()[point.kind==='deadline'?'deadline':point.kind==='event'?'event':'target'];m.setAttribute('role','img');m.setAttribute('aria-label',m.title);if(long)m.append(make('span',point[lang],'point-label'));e.append(m);}
+ for(const point of points){if(point.date<start||point.date>=end)continue;const m=make('span',undefined,'milestone '+point.kind);m.style.left=`calc(${position(point.date)}% - 5.5px)`;m.title=point[lang]+' / '+point.date+' / '+w()[point.kind==='deadline'?'deadline':point.kind==='event'?'event':'target'];m.setAttribute('role','img');m.setAttribute('aria-label',m.title);if(long)m.append(make('span',point[lang],'point-label'));e.append(m);}
  return e;
 }
 function button(text,action,pressed){const b=make('button',text);b.type='button';b.onclick=action;if(pressed!==undefined)b.setAttribute('aria-pressed',String(pressed));return b;}
 function openTask(id){
  const t=fixture.tasks.find(t=>t.id===id);if(!t)return;
- const record=stored()[id];$('record').reset();$('detail').dataset.task=id;
+ const record=stored()[id];decorate($('detail'),t.project);$('record').reset();$('detail').dataset.task=id;
  $('task-name').textContent=t[lang];$('project-name').textContent=projectFor(t.project)[lang];
  const meta=$('task-meta');meta.replaceChildren();
  for(const [key,value]of [[w().state,record?.completed?w().done:w()[t.state]],[t.kind==='deadline'?w().deadline:w().target,t.date?date(t.date):w().undated],[w().points,t.estimate===null?w().unknown:t.estimate+' pt'],[w().waiting,t[lang==='ja'?'blockerJa':'blockerEn']]])if(value)meta.append(make('dt',key),make('dd',value));
@@ -44,7 +47,7 @@ function render(){
  document.documentElement.lang=lang;document.body.dataset.view=view;document.body.classList.toggle('lang-en',lang==='en');localStorage.setItem('edu-revised-lang',lang);
  document.querySelector('.name').textContent=w().name;$('sample').textContent=w().sample;$('previous').textContent=w().old;$('language').textContent=lang==='ja'?'English':'日本語';
  const nav=$('projects');nav.setAttribute('aria-label',w().projects);nav.replaceChildren(button(w().all,()=>{project='';render();},!project),make('p',w().projects));
- for(const p of fixture.projects)nav.append(button(p[lang],()=>{project=p.id;render();},project===p.id));
+ for(const p of fixture.projects){const b=decorate(button(p[lang],()=>{project=p.id;render();},project===p.id),p.id);b.classList.add('project-link');nav.append(b);}
  $('heading').textContent=project?projectFor(project)?.[lang]:w()[view==='all'?'long':view];
  $('range').textContent=view==='all'?(lang==='ja'?'2026年度 - 2033年度':'Academic years 2026-2033'):view==='quarter'?(lang==='ja'?'2027年6月7日 - 9月6日':'June 7 - September 6, 2027'):(lang==='ja'?'2027年6月7日 - 6月13日':'June 7-13, 2027');
  const views=$('views');views.setAttribute('aria-label',lang==='ja'?'期間':'Time range');views.replaceChildren(...['week','quarter','all'].map(v=>button(w()[v==='all'?'long':v],()=>{view=v;render();},view===v)));
@@ -58,8 +61,8 @@ function render(){
  for(const [label,cls]of (view==='all'?[[w().projects,'work']]:[[w().task,'work'],[w().state,'state'],[w().date,'date'],[w().points,'points']])){const th=make('th',label,cls);th.scope='col';head.append(th);}
  const axis=make('th',undefined,'time');axis.scope='col';const scale=make('div',undefined,'time-scale');for(const tick of ticks()){const t=make('span',tick.label,'tick');t.style.left=position(tick.date)+'%';scale.append(t);}axis.append(scale);head.append(axis);
  const body=sheet.createTBody(),records=stored();
- if(view==='all')for(const p of groups){const row=body.insertRow();const label=row.insertCell();label.className='work';label.textContent=p[lang];const cell=row.insertCell();cell.className='time';cell.append(plot(fixture.periods.filter(v=>v.project===p.id),fixture.milestones.filter(v=>v.project===p.id),true));}
- else for(const task of tasks){const row=body.insertRow();row.dataset.task=task.id;const work=row.insertCell();work.className='work';const title=button(task[lang],()=>openTask(task.id));title.className='task';title.setAttribute('aria-label',task[lang]);title.append(make('small',projectFor(task.project)[lang],'project-sub'));work.append(title);
+ if(view==='all')for(const p of groups){const row=decorate(body.insertRow(),p.id);row.dataset.project=p.id;const label=row.insertCell();label.className='work project-title';label.textContent=p[lang];const cell=row.insertCell();cell.className='time';cell.append(plot(fixture.periods.filter(v=>v.project===p.id),fixture.milestones.filter(v=>v.project===p.id),true));}
+ else for(const task of tasks){const row=decorate(body.insertRow(),task.project);row.dataset.project=task.project;row.dataset.task=task.id;const work=row.insertCell();work.className='work';const title=button(task[lang],()=>openTask(task.id));title.className='task';title.setAttribute('aria-label',task[lang]);title.append(make('small',projectFor(task.project)[lang],'project-sub'));work.append(title);
   const state=row.insertCell();state.className='state';state.textContent=records[task.id]?.completed?w().done:w()[task.state];if(task.state==='blocked'&&!records[task.id]?.completed)state.append(make('small',task[lang==='ja'?'blockerJa':'blockerEn'],'blocker-note'));
   const due=row.insertCell();due.className='date';due.append(make('span',task.kind==='deadline'?w().deadline:w().target,'date-kind'),make('span',date(task.date)));
   const points=row.insertCell();points.className='points';points.textContent=task.estimate===null?'—':task.estimate+' pt';points.title=task.estimate===null?w().unknown:w().points;

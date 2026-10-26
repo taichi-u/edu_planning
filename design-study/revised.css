@@ -8,3 +8,19 @@
 .mobile-project{display:none}#recent summary{cursor:pointer;color:#26333b}#recent p{margin:14px 0}@media(max-width:760px){.mobile-project{display:flex;gap:16px;margin-top:20px;font-size:13px;align-items:center}.mobile-project select{flex:1;min-width:0;background:transparent;border:0;border-bottom:1px solid #87949d;border-radius:0;font:inherit;padding:5px 0;color:inherit}.view-controls{margin-top:18px}}
 
 .sheet td.time{position:relative;height:72px}.sheet.long td.time{height:98px}.sheet td.time .time-plot{position:absolute;inset:0;height:auto}.sheet:not(.long) .duration,.sheet:not(.long) .milestone{top:calc(50% - 4px)}
+
+/* Color follows project identity; interaction color stays blue. */
+:root{--project-color:#0072b2;--project-tint:#e8f3fb;--action-color:#165dab}
+.duration{height:12px;background:var(--project-color)}
+.duration.tentative{border-color:var(--project-color);background:none}
+.milestone::before{width:11px;height:11px;border:2px solid var(--project-color);background:var(--project-color)}
+.milestone.target::before{background:#fff}
+.sheet:not(.long) .duration{top:calc(50% - 6px)}
+.sheet:not(.long) .milestone{top:calc(50% - 5.5px)}
+.project-link::before,.project-sub::before,.project-title::before,#project-name::before{content:'';display:inline-block;width:8px;height:8px;margin-right:8px;background:var(--project-color);vertical-align:1px}
+nav button[aria-pressed=true]{background:var(--project-tint);border-left-color:var(--project-color)}
+#views button[aria-pressed=true]{color:var(--action-color);border-bottom-color:var(--action-color)}
+#save{background:var(--action-color);border-color:var(--action-color)}
+#legend .line{background:#5b6871}
+
+nav button.project-link{padding-inline:6px}nav button.project-link[aria-pressed=true]{padding-left:4px}
