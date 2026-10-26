@@ -7,7 +7,7 @@ export function withTaskMarks(plan: Plan): Plan {
   let unassigned: Project | undefined;
   for (const task of plan.planning.tasks.filter(t => !t.archived && t.state !== 'cancelled')) {
     let targets = projects.filter(p => task.projectIds.includes(p.id));
-    if (!targets.length) { unassigned ??= { ...blankProject(), id: 'derived-unassigned', name: '未分類のタスク', shortName: '未分類', sample: true }; if (!projects.includes(unassigned)) projects.push(unassigned); targets = [unassigned]; }
+    if (!targets.length) { unassigned ??= { ...blankProject(), id: 'derived-unassigned', name: '未分類のタスク', shortName: '未分類', sample: false }; if (!projects.includes(unassigned)) projects.push(unassigned); targets = [unassigned]; }
     for (const p of targets) {
       const base = { ...blankMilestone(p.category), title: task.title, publicTitle: '', shared: false, done: task.state === 'done', important: true, confirmed: false };
       if (task.start && task.target && task.start <= task.target) p.milestones.push({ ...base, id: `task-period-${task.id}`, title: `${task.title}・準備`, kind: 'period', start: task.start, end: task.target, important: false });

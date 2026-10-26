@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { withTaskMarks } from '../lib/planning-timeline';
 import assert from 'node:assert/strict';
 import { applyPlanningAction as apply, blankTask, taskSchema, emptyPlanning, worklogSchema, changeSchema, metrics, horizonEnd, inHorizon, shiftMonth, taskBody, worklogBody, eventDay } from '../lib/planning';
 import { emptyPlan, projectPlan, planSchema } from '../lib/domain';
@@ -134,4 +135,13 @@ test('comment readback advances queued close timestamp only when task content is
   assert.equal(conflict.tasks[0].sourceUpdatedAt,now);
   assert.equal(conflict.tasks[0].title,fixture().tasks[0].title);
   assert.equal(conflict.worklogs[0].synced,true);
+});
+
+
+test('unassigned real tasks do not acquire a sample flag; derived dates never persist', () => {
+  const p=emptyPlan();p.planning.tasks=[taskSchema.parse({id:'real',title:'実タスク',target:'2026-11-01'})];
+  const derived=withTaskMarks(p);
+  assert.equal(derived.projects.find(p=>p.id==='derived-unassigned')!.sample,false);
+  assert.equal(derived.projects[0].milestones.length,1);
+  assert.equal(p.projects.length,0);
 });
