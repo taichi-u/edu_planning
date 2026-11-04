@@ -34,6 +34,25 @@ test('starting estimates remain fixed after later estimate changes', () => {
   const p = fixture(); p.tasks[0] = { ...p.tasks[0], state: 'doing', startedAt: now, estimateAtStart: 3 };
   const d = apply(p, { action: 'queue_task', task: { ...p.tasks[0], estimate: 8 }, reason: '範囲を見直した' }, now);
   assert.equal(d.planning.operations[0].desired!.estimateAtStart, 3); assert.equal(d.planning.operations[0].desired!.estimateHistory[0].points, 8);
+  assert.equal(d.planning.operations[0].desired!.estimateHistory[0].reason, '範囲を見直した');
+});
+
+test('split proposals keep distinct criteria, points and the reason for each child', () => {
+  const p = fixture();
+  const children = [
+    { ...blankTask(), acceptance: '基準値を同じ条件で再現する', estimate: 2 },
+    { ...blankTask(), acceptance: '2条件の差を図示する', estimate: 3 },
+  ];
+  const c = changeSchema.parse({ id: 'split', kind: 'split', taskId: 't', reason: '再現と比較は別々に確認できる', after: children, createdAt: now });
+  const proposed = apply(p, { action: 'propose_changes', changes: [c] }, now).planning;
+  const approved = apply(proposed, { action: 'review_changes', accepted: [c.id], rejected: [] }, now).planning;
+  const created = approved.operations.filter(op => op.kind === 'create_task').map(op => op.desired!);
+  assert.deepEqual(created.map(t => [t.parentId, t.acceptance, t.estimate, t.estimateHistory[0].reason]),
+    children.map(t => ['t', t.acceptance, t.estimate, c.reason]));
+  const operation = approved.operations.find(op => op.taskId === created[0].id)!;
+  const prepared = apply(approved, { action: 'sync_prepare', operationId: operation.id }, now).planning;
+  const readback = { ...created[0], issueId: 'new', sourceUpdatedAt: now, acceptance: '' };
+  assert.throws(() => apply(prepared, { action: 'sync_record', operationId: operation.id, lease: prepared.operations.find(op => op.id === operation.id)!.lease, status: 'done', remoteId: 'new', task: readback, error: '' }, now), /一致しません/);
 });
 test('unknown actual time stays null; post-completion feedback is append-only and not duplicated', () => {
   const p = fixture(); p.tasks[0].state = 'done'; const d = apply(p, { action: 'record_worklog', worklog: log() }, now);

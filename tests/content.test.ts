@@ -4,6 +4,23 @@ import { organizeTasks, referenceKind } from '../lib/content';
 import { blankTask, emptyPlanning } from '../lib/planning';
 const options = { scope: '', search: '', anchor: '2026-10-26', horizon: 'week' as const, filter: 'active' as const };
 
+test('intake flags missing criteria or points across horizons and removes reviewed tasks', () => {
+  const p = emptyPlanning(); p.config.privateRepository = 'example/private_task';
+  const base = { ...blankTask(['research']), acceptance: '比較結果を保存', estimate: 3 as const };
+  p.tasks = [
+    { ...base, id: 'import', repository: p.config.privateRepository, estimate: null, target: '2028-03-01' },
+    { ...base, id: 'criteria', acceptance: '  ' }, base,
+    { ...base, id: 'reference', repository: 'example/other', estimate: null },
+    { ...base, id: 'closed', state: 'done', estimate: null },
+    { ...base, id: 'cancelled', state: 'cancelled', estimate: null },
+    { ...base, id: 'archived', archived: true, estimate: null },
+    { ...base, id: 'sample', sample: true, estimate: null },
+  ];
+  assert.deepEqual(organizeTasks(p, options).needsPlanning.map(t => t.id), ['import', 'criteria']);
+  p.tasks[0].estimate = 5;
+  assert.deepEqual(organizeTasks(p, options).needsPlanning.map(t => t.id), ['criteria']);
+});
+
 test('unplanned external issues and PRs never become personal weekly work', () => {
   const p = emptyPlanning(); p.config.privateRepository = 'example/private_task';
   p.tasks = [{...blankTask(),id:'reference',title:'PR: Add solver',repository:'example/solver',url:'https://github.com/example/solver/pull/1'}, {...blankTask(),id:'personal',repository:p.config.privateRepository,horizon:'week'}];

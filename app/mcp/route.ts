@@ -19,7 +19,7 @@ const tools = [
   { name: 'list_tasks', description: '所有者専用。タスク、実施記録、変更案、同期状態、連携設定とrevisionを取得。共有先には返さない。', inputSchema: object({}) },
   { name: 'get_task', description: '所有者専用。タスクと関連記録・変更案を取得。', inputSchema: object({ taskId: str }, ['taskId']) },
   { name: 'get_planning_schema', description: 'タスク、実施記録、計画変更、同期操作の入力仕様を取得。', inputSchema: object({}) },
-  { name: 'planning_mutate', description: '所有者専用。actionはconfigure/queue_task/record_worklog/propose_changes/review_changes/ingest_snapshot/sync_prepare/sync_record。まずget_planning_schemaを取得。GitHub等への実操作は接続ツールで行い、確認後にsync_record。推測した変更案は採用前に実行しない。外部取得は全ページを確認し失敗を空データとして保存しない。', inputSchema: object({ revision: rev, input: { type: 'object' } }, ['revision', 'input']) },
+  { name: 'planning_mutate', description: '所有者専用。actionはconfigure/queue_task/record_worklog/propose_changes/review_changes/ingest_snapshot/sync_prepare/sync_record。まずget_planning_schemaを取得。研究タスクの追加・分割時は上位の節目、成果物と確認方法、各タスクの1・2・3・5・8・13の相対見積もりを確認。根拠不足は未見積もりとし、推定は変更案にする。GitHub等への実操作は接続ツールで行い、確認後にsync_record。推測した変更案は採用前に実行しない。外部取得は全ページを確認し失敗を空データとして保存しない。', inputSchema: object({ revision: rev, input: { type: 'object' } }, ['revision', 'input']) },
   { name: 'daily_brief', description: '所有者専用。今日と今週の予定・タスク、準備開始、待ち、変更案、失敗、前週の実績を取得。毎朝の通知向け。', inputSchema: object({}) },
   { name: 'task_calendar_prepare', description: '所有者専用。選択したタスクの目標日または正式締切をCalendarへ反映する準備。外部操作後はcalendar_record。', inputSchema: object({ taskId:str, kind:{type:'string',enum:['target','deadline']}, calendarId:str },['taskId','kind','calendarId']) },
 ];
