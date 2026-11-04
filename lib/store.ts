@@ -3,7 +3,7 @@ import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { emptyPlan, planSchema, projectSchema, settingsSchema, projectPlan, canEdit, calendarPayload, fingerprint, blankProject, blankMilestone, type Project, type Milestone, type Plan, type PlanResponse } from './domain';
 import { samplePlan } from './sample';
 import { z } from 'zod';
-import { applyPlanningAction, planningActionSchema, metrics, jstToday, shiftDay, eventDay } from './planning';
+import { applyPlanningAction, planningActionSchema, metrics, jstToday, sprintWeek, shiftDay, eventDay } from './planning';
 
 export class AppError extends Error { constructor(message: string, public status = 400) { super(message); } }
 export function db() { if (!env.DB) throw new AppError('データベースが利用できません', 503); return env.DB; }
@@ -86,8 +86,8 @@ export async function mutatePlanning(raw: unknown) {
   return { planning: applied.planning, result: applied.result, revision: revision + 1 };
 }
 export async function dailyBrief() {
-  const { planning, revision } = await readPlanning(); const today = jstToday(); const end = shiftDay(today, 6);
-  return { revision, today, tasks: planning.tasks.filter(t => !t.archived && !['done','cancelled'].includes(t.state) && (t.horizon !== 'later' || t.state === 'blocked' || [t.start,t.target,t.deadline.value,t.blocker.reviewOn].some(d => d && d <= end))), events: planning.events.filter(e => !e.cancelled && eventDay(e.start) >= today && eventDay(e.start) <= end), changes: planning.changes.filter(c => c.status === 'proposed'), pending: planning.operations.filter(o => o.state !== 'done'), sources: planning.sources, metrics: metrics(planning, shiftDay(today,-7),shiftDay(today,-1)), monday: new Date(today+'T00:00:00Z').getUTCDay() === 1, monthStart: today.endsWith('-01') };
+  const { planning, revision } = await readPlanning(); const today = jstToday(); const end = shiftDay(today, 6); const week = sprintWeek(today);
+  return { revision, today, tasks: planning.tasks.filter(t => !t.archived && !['done','cancelled'].includes(t.state) && (t.horizon !== 'later' || t.state === 'blocked' || [t.start,t.target,t.deadline.value,t.blocker.reviewOn].some(d => d && d <= end))), events: planning.events.filter(e => !e.cancelled && eventDay(e.start) >= today && eventDay(e.start) <= end), changes: planning.changes.filter(c => c.status === 'proposed'), pending: planning.operations.filter(o => o.state !== 'done'), sources: planning.sources, metrics: metrics(planning, shiftDay(today,-7),shiftDay(today,-1)), weekToDate: { from: week.from, through: today, ...metrics(planning, week.from, today) }, monday: new Date(today+'T00:00:00Z').getUTCDay() === 1, monthStart: today.endsWith('-01') };
 }
 export async function calendarTargets() {
   const ctx = await ownerContext();

@@ -55,6 +55,11 @@ export function jstToday(now = new Date()) { return new Intl.DateTimeFormat('en-
 export function eventDay(value:string) { return value.length===10 ? value : jstToday(new Date(value)); }
 export function elapsedDays(t:Task,now=new Date()) { return t.startedAt ? Math.max(0,Math.floor((Date.parse(t.completedAt || now.toISOString())-Date.parse(t.startedAt))/86400000)) : null; }
 export function shiftDay(day: string, n: number) { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+export function sprintWeek(today: string) {
+  const weekday = new Date(today + 'T00:00:00Z').getUTCDay();
+  const from = shiftDay(today, -((weekday + 6) % 7));
+  return { from, to: shiftDay(from, 6) };
+}
 export function shiftMonth(day: string, months: number) { const d = new Date(day + 'T00:00:00Z'), n = d.getUTCDate(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + months); d.setUTCDate(Math.min(n, new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate())); return d.toISOString().slice(0, 10); }
 export function horizonEnd(start: string, horizon: Horizon) { return horizon === 'all' ? '9999-12-31' : horizon === 'week' ? shiftDay(start, 6) : shiftDay(shiftMonth(start, horizon === 'month' ? 1 : horizon === 'quarter' ? 3 : 6), -1); }
 export function taskDate(t: Task) { return t.target || (t.deadline.value ? t.deadline.value + (t.deadline.precision === 'month' ? '-01' : '') : '') || t.start; }
@@ -63,12 +68,30 @@ export function canWriteTask(t: Task, config: Planning['config']) { return !t.re
 export function pendingFor(p: Planning, taskId: string) { return p.operations.some(o => o.taskId === taskId && o.provider === 'github' && o.state !== 'done'); }
 export function taskBody(t: Task, marker: string) { return `## 目的\n${t.purpose}\n\n## 完了条件\n${t.acceptance}\n\n## 計画\n- 状態: ${taskStates[t.state]}\n- 準備開始: ${t.start || '未定'}\n- 目標日: ${t.target || '未定'}\n- 正式締切: ${t.deadline.value || '未定'}${t.deadline.confirmed ? '（確認済み）' : '（未確認）'}\n- 出典: ${t.deadline.sourceUrl}\n- 見積もり: ${t.estimate ?? '未見積もり'} / ${t.scale}\n\n<!-- ${marker} -->\n<!-- edu-planning-task:${JSON.stringify(t)} -->`; }
 export function worklogBody(log: Worklog, marker: string) { return `## 実施記録\n${log.summary}\n\n### 成果\n${log.outcome}\n\n### Blocker\n${log.blocker}\n\n### Feedback\n${log.feedback}\n\n### 学んだこと\n${log.learned}\n\n### 見積もりとの差\n${log.estimateNote}\n\n実作業時間: ${log.actualMinutes === null ? '未記録' : log.actualMinutes + '分'}\n${log.links.join('\n')}\n\n<!-- ${marker} -->\n<!-- edu-planning-worklog:${JSON.stringify(log)} -->`; }
-export function metrics(p: Planning, from: string, to: string) {
-  const hasChildren = new Set(p.tasks.filter(t => !t.archived).map(t => t.parentId));
-  const leaf = p.tasks.filter(t => !hasChildren.has(t.id) && !t.archived), scopes = [...new Set(leaf.filter(t => t.estimate !== null || t.estimateAtStart !== null).map(t => t.scale))];
-  const completed = leaf.filter(t => t.state === 'done' && t.completedAt && jstToday(new Date(t.completedAt)) >= from && jstToday(new Date(t.completedAt)) <= to);
-  const minutes = p.worklogs.filter(l => l.synced && l.actualMinutes !== null && jstToday(new Date(l.at)) >= from && jstToday(new Date(l.at)) <= to);
-  return { completedCount: completed.length, wip: leaf.filter(t => ['doing', 'blocked'].includes(t.state)).length, actualMinutes: minutes.length ? minutes.reduce((n, l) => n + l.actualMinutes!, 0) : null, scales: scopes.map(scale => ({ scale, planned: leaf.filter(t => t.scale === scale && t.estimateOrigin === 'planned' && t.target >= from && t.target <= to && t.state !== 'cancelled').reduce((n, t) => n + (t.estimateAtStart ?? t.estimate ?? 0), 0), completed: completed.filter(t => t.scale === scale && t.estimateOrigin === 'planned').reduce((n, t) => n + (t.estimateAtStart ?? 0), 0) })) };
+export function metrics(p: Planning, from: string, to: string, projectId = '') {
+  const personal = p.tasks.filter(t => !t.archived && !t.sample && canWriteTask(t, p.config));
+  const hasChildren = new Set(personal.map(t => t.parentId));
+  const selected = personal.filter(t => !projectId || t.projectIds.includes(projectId));
+  const ids = new Set(selected.map(t => t.id));
+  const leaf = selected.filter(t => !hasChildren.has(t.id));
+  const inPeriod = (at: string) => {
+    const day = jstToday(new Date(at));
+    return day >= from && day <= to;
+  };
+  const completed = leaf.filter(t => t.state === 'done' && t.completedAt && inPeriod(t.completedAt));
+  const scored = completed.filter(t => t.estimateOrigin === 'planned' && t.estimateAtStart !== null);
+  const planned = leaf.filter(t => t.estimateOrigin === 'planned' && t.state !== 'cancelled' && t.target >= from && t.target <= to && (t.estimateAtStart ?? t.estimate) !== null);
+  const scales = [...new Set([...scored, ...planned].map(t => t.scale))].sort();
+  const minutes = p.worklogs.filter(l => ids.has(l.taskId) && l.synced && l.actualMinutes !== null && inPeriod(l.at));
+  return {
+    completedCount: completed.length, unscoredCount: completed.length - scored.length,
+    wip: leaf.filter(t => ['doing', 'blocked'].includes(t.state)).length,
+    actualMinutes: minutes.length ? minutes.reduce((n, l) => n + l.actualMinutes!, 0) : null,
+    scales: scales.map(scale => ({
+      scale, planned: planned.filter(t => t.scale === scale).reduce((n, t) => n + (t.estimateAtStart ?? t.estimate ?? 0), 0),
+      completed: scored.filter(t => t.scale === scale).reduce((n, t) => n + t.estimateAtStart!, 0),
+    })),
+  };
 }
 const snapshotWindow = z.object({ calendarId: id, start: date, end: date }).refine(v=>!!v.start&&!!v.end&&v.start<=v.end,'取得期間を確認してください');
 export const snapshotSchema = z.object({ source: sourceSchema, tasks: z.array(taskSchema).optional(), events: z.array(calendarEventSchema).optional(), worklogs: z.array(worklogSchema).optional(), window: snapshotWindow.optional() });

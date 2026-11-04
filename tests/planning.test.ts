@@ -1,7 +1,7 @@
 import test from 'node:test';
 import { withTaskMarks } from '../lib/planning-timeline';
 import assert from 'node:assert/strict';
-import { applyPlanningAction as apply, blankTask, taskSchema, emptyPlanning, worklogSchema, changeSchema, metrics, horizonEnd, inHorizon, shiftMonth, taskBody, worklogBody, eventDay } from '../lib/planning';
+import { applyPlanningAction as apply, blankTask, taskSchema, emptyPlanning, worklogSchema, changeSchema, metrics, sprintWeek, horizonEnd, inHorizon, shiftMonth, taskBody, worklogBody, eventDay } from '../lib/planning';
 import { emptyPlan, projectPlan, planSchema } from '../lib/domain';
 const now = '2026-10-26T00:00:00.000Z';
 function fixture() { const p = emptyPlanning(); p.config.privateRepository = 'example/private_task'; p.tasks = [taskSchema.parse({ ...blankTask(), id: 't', title: '比較結果を整理する', repository: p.config.privateRepository, issueId: 'I_1', issueNumber: 1, sourceUpdatedAt: now, estimate: 3 })]; return p; }
@@ -106,6 +106,29 @@ test('metrics exclude parent, cancelled, retrospective; preserve separate scales
     { ...p.tasks[0], id: 'other', scale: 'team-b', state: 'done', estimateAtStart: 8, completedAt: now },
   ]; const m = metrics(p, '2026-10-26', '2026-11-01');
   assert.equal(m.actualMinutes, null); assert.equal(m.scales.find(s => s.scale === 'personal')!.completed, 3); assert.equal(m.scales.find(s => s.scale === 'team-b')!.completed, 8);
+});
+
+test('weekly points use JST Monday through Sunday and keep unscored completions visible', () => {
+  const p = fixture();
+  const base = { ...p.tasks[0], state: 'done' as const, estimateAtStart: 3 as const, projectIds: ['project'], completedAt: '2027-01-03T14:59:59Z' };
+  p.tasks = [
+    { ...base, id: 'a', completedAt: '2026-12-27T15:00:00Z' }, { ...base, id: 'b', estimateAtStart: 5 },
+    { ...base, id: 'next-week', completedAt: '2027-01-03T15:00:00Z' },
+    { ...base, id: 'previous-week', completedAt: '2026-12-27T14:59:59Z' },
+    { ...base, id: 'unknown', estimateAtStart: null }, { ...base, id: 'retro', estimateOrigin: 'retrospective' },
+    { ...base, id: 'sample', sample: true }, { ...base, id: 'external', repository: 'another/project' },
+    { ...base, id: 'parent' }, { ...base, id: 'other-project', parentId: 'parent', projectIds: ['other'] },
+  ];
+  const week = sprintWeek('2027-01-03');
+  assert.deepEqual(week, { from: '2026-12-28', to: '2027-01-03' });
+  assert.deepEqual(sprintWeek(week.from), week);
+  const m = metrics(p, week.from, week.to, 'project');
+  assert.equal(m.completedCount, 4);
+  assert.equal(m.unscoredCount, 2);
+  assert.deepEqual(m.scales, [{ scale: 'personal', planned: 0, completed: 8 }]);
+  const empty = metrics(p, week.from, week.to, 'absent');
+  assert.equal(empty.completedCount, 0);
+  assert.equal(empty.unscoredCount, 0);
 });
 test('unchanged refresh preserves proposal versions; calendar UTC midnight is interpreted in Japan',()=>{
  const p=fixture();p.tasks[0].version=3;
