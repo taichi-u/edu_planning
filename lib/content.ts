@@ -9,7 +9,8 @@ export function organizeTasks(planning: Planning, options: { scope: string; sear
   const candidates = personal.filter(t => options.filter === 'done' ? ['done', 'cancelled'].includes(t.state) : options.filter === 'all' || inHorizon(t, options.anchor, options.horizon));
   const unplanned = (t: Task) => !taskDate(t) && t.horizon === 'later' && t.state === 'todo';
   const byDate = (a: Task, b: Task) => (taskDate(a) || '9999').localeCompare(taskDate(b) || '9999') || a.title.localeCompare(b.title, 'ja');
-  return { personal, references, tasks: candidates.filter(t => !unplanned(t)).sort(byDate), undated: candidates.filter(unplanned).sort(byDate) };
+  const needsPlanning = personal.filter(t => !t.sample && !['done', 'cancelled'].includes(t.state) && (!t.acceptance.trim() || t.estimate === null));
+  return { personal, references, needsPlanning, tasks: candidates.filter(t => !unplanned(t)).sort(byDate), undated: candidates.filter(unplanned).sort(byDate) };
 }
 
 export function referenceKind(task: Task) { return /\/pull\//.test(task.url) || task.title.startsWith('PR: ') ? 'PR' : 'Issue'; }
