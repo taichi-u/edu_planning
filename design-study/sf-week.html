@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja" data-theme="orbit">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>週の作業記録 | 研究ロードマップ・外観比較</title>
+<link rel="stylesheet" href="sf-week.css">
+<body>
+  <header class="mast"><div class="wrap mast-inner">
+    <div class="brand"><svg width="38" height="38" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="12" fill="none" stroke="currentColor"/><ellipse cx="20" cy="20" rx="20" ry="6" transform="rotate(-38 20 20)" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="20" cy="20" r="2.8" fill="currentColor"/></svg><span>研究ロードマップ</span></div>
+    <nav aria-label="外観の比較"><a href="#orbit">A　軌道管制卓</a><a href="#folio">B　観測記録紙</a></nav>
+  </div></header>
+  <main class="wrap">
+    <div class="context"><span>研究計画 <b>/</b> 振り返り</span><span class="tag">仮データ</span></div>
+    <div class="page-heading"><div><span class="kicker">WEEKLY RECORD</span><h1>週の作業記録</h1></div>
+      <div class="range"><strong>2026.11.09 <span>—</span> 11.15</strong><small>第46週　/　日本時間</small></div></div>
+    <section class="instrument" aria-labelledby="point-title">
+      <div class="readout"><div class="section-no">01 <i></i> SPRINT</div><h2 id="point-title">今週の完了ポイント</h2>
+        <p class="digits"><output id="score"></output><span>pt</span></p>
+        <p class="readout-note" id="tally"></p>
+      </div>
+      <div class="chart-panel"><div class="chart-head"><h3 id="chart-title">完了ポイントの累計</h3><span class="legend"><i></i> 個人尺度</span></div>
+        <div class="plot-frame"><div class="y-scale" aria-hidden="true"><span>20</span><span>10</span><span>0</span></div><svg id="plot" viewBox="0 0 580 138" preserveAspectRatio="none" role="img" aria-labelledby="chart-title trend-description"><desc id="trend-description"></desc></svg></div>
+        <div class="days" aria-hidden="true"><span>月 09</span><span>火 10</span><span>水 11</span><span>木 12</span><span>金 13</span><span>土 14</span><span>日 15</span></div>
+      </div>
+    </section>
+    <div class="lower">
+      <section class="logs"><div class="section-no">02 <i></i> LOG</div><div class="section-heading"><h2>完了したタスク</h2><small>着手時の見積もり</small></div>
+        <div id="entries"></div>
+      </section>
+      <section class="milestones"><div class="section-no">03 <i></i> MILESTONES</div><div class="section-heading"><h2>次の節目</h2></div>
+        <ol><li><time datetime="2026-11-20">11.20</time><div><small>◇ 目標日</small><strong>比較条件の確定</strong></div></li>
+        <li><time datetime="2026-11-27">11.27</time><div><small>◇ 目標日</small><strong>解析レポート初稿</strong></div></li>
+        <li><time datetime="2026-12-04">12.04</time><div><small>◆ 正式締切</small><strong>学内発表要旨の提出</strong></div></li></ol>
+      </section>
+    </div>
+  </main>
+  <script src="sf-week.js"></script>
+</body>
+</html>
