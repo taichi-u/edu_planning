@@ -13,5 +13,8 @@ export default defineConfig({
       cn: fileURLToPath(new URL('./src/cn.ts', import.meta.url)),
     },
   },
-  build: { license: true },
+  build: {
+    license: true,
+    rolldownOptions: { input: { dashboard: 'index.html', research: 'research.html' } },
+  },
 });
