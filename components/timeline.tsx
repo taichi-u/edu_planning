@@ -53,24 +53,24 @@ export default function Timeline({ plan, range, anchor, selected, onSelect, filt
   return <div className="timeline-scroll"><svg className="timeline" viewBox={`0 0 ${width} ${cursor+12}`} role="group" aria-label={`${start}から${end}の研究ロードマップ。期間は帯、正式締切は菱形、開催日は丸。各項目は選択できます。`}>
     <defs><clipPath id={clip}><rect x={left} y="0" width={plot} height={cursor}/></clipPath></defs>
     <text x="14" y="27" className="axis-label">{groupBy==='project'?'プロジェクト':'カテゴリー'}</text>
-    {years.filter(y=>y.start<=end&&y.end>=start).map(y=><g key={y.label}><rect x={Math.max(left,x(y.start))} y="39" width={Math.max(0,Math.min(width-right,x(y.end))-Math.max(left,x(y.start)))} height="31" fill="#efeee8" stroke="#d8d9d3"/><text x={Math.max(left,x(y.start))+8} y="59" className="phase-label">{y.label}</text></g>)}
-    {ticks.map((t,i)=><g key={t.date+i}><line x1={x(t.date)} x2={x(t.date)} y1="73" y2={cursor} stroke="#e1e2dc"/><text x={x(t.date)+7} y="27" className="axis-label">{t.label}</text></g>)}
-    {(range==='90'||range==='quarter'||range==='month')&&Array.from({length:Math.ceil((last-first)/86400000/7)},(_,i)=>addDays(start,i*7)).map(t=><line key={t} x1={x(t)} x2={x(t)} y1="73" y2={cursor} stroke="#e5e6e1" strokeDasharray="2 5"/>)}
-    {lanes.map(l=><g key={l.id}><line x1="0" x2={width} y1={l.top} y2={l.top} stroke="#d8d9d3"/><rect x="14" y={l.top+22} width="8" height="8" fill={l.color}/><text x="31" y={l.top+31} className="lane-label">{l.label}</text></g>)}
-    <line x1={left} x2={left} y1="0" y2={cursor} stroke="#d8d9d3"/>
+    {years.filter(y=>y.start<=end&&y.end>=start).map(y=><g key={y.label}><rect x={Math.max(left,x(y.start))} y="39" width={Math.max(0,Math.min(width-right,x(y.end))-Math.max(left,x(y.start)))} height="31" fill="var(--timeline-phase, #efeee8)" stroke="var(--timeline-line, #d8d9d3)"/><text x={Math.max(left,x(y.start))+8} y="59" className="phase-label">{y.label}</text></g>)}
+    {ticks.map((t,i)=><g key={t.date+i}><line x1={x(t.date)} x2={x(t.date)} y1="73" y2={cursor} stroke="var(--timeline-line, #e1e2dc)"/><text x={x(t.date)+7} y="27" className="axis-label">{t.label}</text></g>)}
+    {(range==='90'||range==='quarter'||range==='month')&&Array.from({length:Math.ceil((last-first)/86400000/7)},(_,i)=>addDays(start,i*7)).map(t=><line key={t} x1={x(t)} x2={x(t)} y1="73" y2={cursor} stroke="var(--timeline-line, #e5e6e1)" strokeDasharray="2 5"/>)}
+    {lanes.map(l=><g key={l.id}><line x1="0" x2={width} y1={l.top} y2={l.top} stroke="var(--timeline-line, #d8d9d3)"/><rect x="14" y={l.top+22} width="8" height="8" fill={l.color}/><text x="31" y={l.top+31} className="lane-label">{l.label}</text></g>)}
+    <line x1={left} x2={left} y1="0" y2={cursor} stroke="var(--timeline-line, #d8d9d3)"/>
     {selected&&chosen.length>1&&<path d={chosen.map((m,i)=>`${i?'L':'M'}${m.x} ${m.y}`).join(' ')} stroke="#737b7a" strokeWidth="1.3" strokeDasharray="4 4" fill="none" opacity=".65" clipPath={`url(#${clip})`}/>}
-    {today>=start&&today<=end&&<g><line x1={x(today)} x2={x(today)} y1="73" y2={cursor} stroke="#242a2e" strokeWidth="1"/><rect x={x(today)-17} y="72" width="34" height="19" fill="#242a2e"/><text x={x(today)} y="86" textAnchor="middle" fill="white" fontSize="12">今日</text></g>}
+    {today>=start&&today<=end&&<g><line x1={x(today)} x2={x(today)} y1="73" y2={cursor} stroke="var(--timeline-today, #242a2e)" strokeWidth="1"/><rect x={x(today)-17} y="72" width="34" height="19" fill="var(--timeline-today, #242a2e)"/><text x={x(today)} y="86" textAnchor="middle" fill="var(--timeline-on-today, white)" fontSize="12">今日</text></g>}
     {marks.map(({project:p,milestone:m,x:px,endX,y,labelX,anchor:labelAnchor,label,period})=>{
       const c=categories.find(c=>c.id===m.category)!; const active=selected===p.id,color=groupBy==='project'?projectColor(p.id):c.color; const marker = m.kind==='deadline'||m.kind==='target';
       return <g key={p.id+m.id} className={`timeline-item ${active?'selected':''}`} role="button" tabIndex={0} aria-label={`${p.shortName}、${m.title}、${kinds[m.kind]}、${m.start}${!m.confirmed?'、予定':''}`} onClick={()=>onSelect(p.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(p.id);}}}>
         <title>{p.name} / {m.title} / {m.start}{m.end?' – '+m.end:''}</title>
         <rect x={Math.min(px,labelX-(labelAnchor==='end'?label.length*13:0))-4} y={y-21} width={Math.max(44,endX-px+label.length*8)} height="39" fill="transparent"/>
         {period?<><rect x={px} y={y-7} width={Math.max(5,endX-px)} height="13" rx="2" fill={color} fillOpacity={active?1:.85} stroke={color} strokeWidth={active?2:1} strokeDasharray={m.confirmed?undefined:'4 3'}/><text x={labelX} y={y-13} textAnchor={labelAnchor} className="mark-label">{label}{!m.confirmed?' · 予定':''}{m.done?' ✓':''}</text></>:<>
-          {marker?<path d={`M${px} ${y-7}l7 7-7 7-7-7z`} fill={m.kind==='target'?'#FFFFFF':color} stroke={color} strokeWidth="2" strokeDasharray={m.confirmed?undefined:'3 2'}/>:m.kind==='submitted'?<text x={px-7} y={y+6} fontSize="20" fontWeight="600">✓</text>:<circle cx={px} cy={y} r="6" fill={color} stroke={active?'#242A2E':color} strokeWidth="1.5"/>}
+          {marker?<path d={`M${px} ${y-7}l7 7-7 7-7-7z`} fill={m.kind==='target'?'var(--timeline-target, #fff)':color} stroke={color} strokeWidth="2" strokeDasharray={m.confirmed?undefined:'3 2'}/>:m.kind==='submitted'?<text x={px-7} y={y+6} fontSize="20" fontWeight="600" fill="var(--ink)">✓</text>:<circle cx={px} cy={y} r="6" fill={color} stroke={active?'#242A2E':color} strokeWidth="1.5"/>}
           <text x={labelX} y={y+5} textAnchor={labelAnchor} className="mark-label">{label}{m.done?' ✓':''}<tspan className="mark-status">{!m.confirmed?' · 予定':''}</tspan></text>
         </>}
       </g>;
     })}
-    <line x1="0" x2={width} y1={cursor} y2={cursor} stroke="#d8d9d3"/>
+    <line x1="0" x2={width} y1={cursor} y2={cursor} stroke="var(--timeline-line, #d8d9d3)"/>
   </svg></div>;
 }

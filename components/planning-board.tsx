@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, X, ArrowUpRight, Check } from 'lucide-react';
 import type { PlanResponse, Project } from '@/lib/domain';
-import { blankTask, canWriteTask, elapsedDays, eventDay, changeSchema, configSchema, horizonEnd, jstToday, metrics, pendingFor, points, sprintWeek, taskDate, taskStates, worklogSchema, type Horizon, type Planning, type PlanningAction, type Task } from '@/lib/planning';
+import { blankTask, canWriteTask, elapsedDays, eventDay, changeSchema, configSchema, horizonEnd, jstToday, pendingFor, points, taskDate, taskStates, worklogSchema, type Horizon, type Planning, type PlanningAction, type Task } from '@/lib/planning';
 import { organizeTasks, referenceKind, referenceTitle } from '@/lib/content';
 import TaskEditor from './task-editor';
+import WeeklyRecord from './weekly-record';
 import SnapshotImport from './snapshot-import';
 
 export type PlanningTab = 'tasks' | 'review' | 'connections' | 'references';
@@ -71,18 +72,14 @@ export default function PlanningBoard({ data, projects, scope, horizon, anchor, 
   async function mutate(input: PlanningAction) { setBusy(true); setError(''); try { const r = await fetch('/api/planning', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...input, revision: data.revision }) }); const body = await r.json() as {error?:string}; if (!r.ok) throw new Error(body.error); await onReload(); setNotice(input.action === 'configure' ? '設定を保存しました' : input.action === 'propose_changes' ? '変更案を保存しました' : ['ingest_bundle','ingest_snapshot'].includes(input.action) ? '取得結果を保存しました' : 'Siteに保存済み。GitHubへの反映待ちです。'); } finally { setBusy(false); } }
   async function run(input: PlanningAction) { try { await mutate(input); } catch (e) { setError(e instanceof Error ? e.message : '操作できません'); } }
   const {personal:scoped,tasks,undated,references,needsPlanning} = organizeTasks(p,{scope,search,anchor,horizon,filter});
-  const task = p.tasks.find(t => t.id === selected), logs = p.worklogs.filter(l => l.taskId === selected), today = jstToday(), week = sprintWeek(today);
-  const stats = metrics(p, week.from, week.to, scope);
-  const earned = stats.scales.filter(s => s.completed > 0);
+  const task = p.tasks.find(t => t.id === selected), logs = p.worklogs.filter(l => l.taskId === selected), today = jstToday();
   const events = p.events.filter(e => !e.cancelled && (!scope || e.projectIds.includes(scope)) && eventDay(e.end) >= anchor && eventDay(e.start) <= horizonEnd(anchor, horizon));
   const renderTasks=(rows:Task[])=><div className="table-scroll"><table className="task-table"><thead><tr><th>タスク・プロジェクト</th><th>日付</th><th>状態</th><th>見積もり</th><th>操作</th></tr></thead><tbody>{rows.map(t => <tr key={t.id}><td><button className="row-button" onClick={() => setSelected(t.id)}>{t.title}</button><small>{t.projectIds.map(id => projects.find(p => p.id === id)?.shortName).filter(Boolean).join(' / ') || '未分類'}</small>{!canWriteTask(t, p.config) && <small>参照 / {t.repository}</small>}</td><td data-label="日付">{t.start && <small>準備 {t.start}</small>}{t.target && <span>目標 {t.target}</span>}{t.deadline.value && <small>正式締切 {t.deadline.value}{t.deadline.confirmed ? '' : '（未確認）'}</small>}{!taskDate(t) && <span>日付未定</span>}{taskDate(t) && taskDate(t) < today && !['done', 'cancelled'].includes(t.state) && <small className="overdue">期限・予定日を確認</small>}</td><td data-label="状態"><span className={`task-state state-${t.state}`}>{taskStates[t.state]}</span>{pendingFor(p, t.id) && <small>反映待ち</small>}{elapsedDays(t)!==null&&<small>{t.state==='done'?'完了まで':'着手から'} {elapsedDays(t)}日</small>}{t.state === 'done' && !p.worklogs.some(l => l.taskId === t.id && l.synced) && <small>振り返り未記入</small>}{t.blocker.reason && <small>{t.blocker.reason}</small>}</td><td data-label="見積もり">{t.estimate ?? '—'}{t.estimateOrigin === 'retrospective' && <small>事後推定</small>}</td><td data-label="記録">{canWriteTask(t, p.config) && <button aria-label={`${t.title}の作業記録`} disabled={busy || pendingFor(p, t.id)} onClick={() => setLogging(t)}>記録</button>}</td></tr>)}</tbody></table>{!rows.length && <p className="empty">対象のタスクはありません。</p>}</div>;
   if (!owner) return null;
   return <section className="planning-board" aria-label="タスクと作業記録">    {error && <p className="error" role="alert">{error}</p>}<p className="saved-status" role="status">{notice}</p>
+    {(tab === 'tasks' || tab === 'review') && <WeeklyRecord planning={p} projects={projects} scope={scope} today={today} review={tab === 'review'} onSelect={setSelected}/>}
     {tab === 'tasks' && <><div className="section-line"><h2>作業 <span className="count">{tasks.length}</span></h2><div className="inline-actions"><select aria-label="タスクの状態で絞り込み" value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="active">未完了</option><option value="done">完了・取りやめ</option><option value="all">すべて</option></select><button className="primary" onClick={() => setEditing(blankTask(scope ? [scope] : []))}><Plus size={15}/>作業を追加</button></div></div>
-      <details className="weekly-summary">
-        <summary>今週の完了ポイント　<strong>{earned.length ? earned.map(s => `${s.scale === 'personal' ? '' : s.scale + ' '}${s.completed} pt`).join(' ／ ') : stats.unscoredCount ? '点数未集計' : '0 pt'}</strong>　完了 {stats.completedCount}件{stats.unscoredCount > 0 && `（点数対象外 ${stats.unscoredCount}件）`}</summary>
-        <div className="weekly-metrics"><span>{week.from} 〜 {week.to}（日本時間）</span><span>進行中 {stats.wip}件</span>{stats.scales.map(s => <span key={s.scale}>{s.scale}：計画 {s.planned} pt</span>)}<span>実作業 {stats.actualMinutes === null ? '未記録' : `${stats.actualMinutes}分`}</span><span>完了点は着手時の見積もりで集計</span></div>
-      </details>
+
       {needsPlanning.length > 0 && <details className="undated-tasks"><summary>完了条件・見積もりの確認待ち <span className="count">{needsPlanning.length}</span></summary>
         <ul>{needsPlanning.map(t => <li key={t.id}><button className="text-button" onClick={() => setSelected(t.id)}>{t.title}</button> · {[!t.acceptance.trim() && '完了条件未記入', t.estimate === null && '未見積もり'].filter(Boolean).join(' / ')}</li>)}</ul>
       </details>}
