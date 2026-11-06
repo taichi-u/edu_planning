@@ -1,0 +1,81 @@
+/* Screen tokens are scoped to the interactive roadmap. The print route has its own palette. */
+@media screen {
+  .app-shell {
+    color-scheme: dark;
+    --bg: #10191b; --paper: #172428; --ink: #eff4e9; --muted: #afc1bb;
+    --line: #3a4c4d; --blue: #dafa82; --orbit-active: #243532; --orbit-grid: #314348;
+    --orbit-mono: Consolas, "SFMono-Regular", monospace;
+    --timeline-phase: #213034; --timeline-line: #394c50; --timeline-today: #dafa82;
+    --timeline-on-today: #10191b; --timeline-target: #10191b;
+    color: var(--ink); background: var(--bg); min-height: 100vh; accent-color: var(--blue);
+  }
+  .app-header, .project-navigation, .detail-panel, .detail-heading { background: var(--paper); }
+  .app-header { border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .app-header .brand::before { content: ""; width: 34px; height: 34px; flex: none; background: url("/favicon.svg") center / contain no-repeat; }
+  .app-shell a { color: #a4d8d0; }
+  .app-shell :is(a, button, summary, input, textarea, select):focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+  .app-shell :is(button, .button):hover, .app-shell .selected-row { background: var(--orbit-active); color: var(--ink); }
+  .app-shell .primary { color: #172119; background: var(--blue); border-color: var(--blue); }
+  .app-shell .primary:hover { color: #10191b; background: #e9ffaf; }
+  .app-shell input[type=checkbox] { accent-color: var(--blue); }
+  .app-shell :is(input:not([type=checkbox]), select, textarea, dialog) { border-color: #758882; }
+  .app-shell :is(.project-navigation button[aria-pressed=true], .active) { color: var(--blue); background: var(--orbit-active); }
+  .app-shell .content-tabs { border-bottom-color: var(--line); }
+  .app-shell .content-tabs button.selected, .app-shell .range-control button.selected { color: var(--blue); border-bottom-color: var(--blue); }
+  .app-shell .setup-banner, .app-shell .sample-label { background: #263537; color: var(--ink); }
+  .app-shell :is(.danger, .overdue, .task-warning) { color: #ffb691; }
+  .app-shell .error { background: #392b27; border-color: #966948; color: #ffcfba; }
+  .app-shell .timeline-item:is(:hover, .selected)>rect:first-of-type { fill: #364c4b; }
+  .app-shell .project-navigation i, .app-shell .project-dot, .app-shell .timeline-item :is(path,circle,rect:not(:first-of-type)) { filter: brightness(1.25); }
+}
+
+.week-record { margin: 4px 0 24px; }
+.week-heading, .chart-caption { display: flex; justify-content: space-between; align-items: end; gap: 12px; }
+.week-heading { margin-bottom: 15px; }
+.week-heading h2 { font-size: clamp(26px, 3vw, 42px); font-weight: 600; line-height: 1.25; }
+.week-heading div>small, .instrument-index { font: 12px/1.5 var(--orbit-mono); letter-spacing: .11em; color: var(--blue); }
+.week-heading p { font: 600 16px/1.6 var(--orbit-mono); text-align: right; }
+.week-heading p small { font-size: 12px; line-height: 1.6; font-weight: 400; }
+.week-instrument { display: grid; grid-template-columns: minmax(175px, 1fr) minmax(0, 2.1fr); border: 1px solid var(--line); border-top: 2px solid var(--blue); background: var(--paper); position: relative; }
+.week-instrument::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 8px; height: 8px; border: solid var(--blue); border-width: 0 2px 2px 0; }
+.week-readout, .week-chart { padding: clamp(14px, 2vw, 26px); min-width: 0; }
+.week-readout { border-right: 1px solid var(--line); }
+.week-readout h3 { margin-top: 8px; font-size: 16px; }
+.score-digits { color: var(--blue); font: 500 clamp(48px, 5.5vw, 84px)/1.12 var(--orbit-mono); letter-spacing: -.07em; overflow-wrap: anywhere; }
+.score-digits span { font-size: 20px; letter-spacing: 0; }
+.score-unavailable { color: var(--blue); font-size: 22px; margin: 10px 0; }
+.chart-caption { align-items: center; margin-bottom: 10px; }
+.chart-caption h3 { font-size: 14px; }
+.chart-caption select { width: auto; max-width: 52%; margin: 0; }
+.score-plot { color: var(--blue); display: grid; grid-template-columns: 28px minmax(0,1fr); }
+.score-plot svg { width: 100%; height: 116px; }
+.score-axis { display: flex; flex-direction: column; justify-content: space-between; padding: 5px 0 1px; }
+.score-axis, .score-days { color: var(--muted); font: 12px var(--orbit-mono); }
+.score-days { grid-column: 2; display: flex; justify-content: space-between; gap: 2px; }
+.plot-grid { stroke: var(--muted); opacity: .35; stroke-dasharray: 2 5; }
+.score-line, .score-point { stroke: currentColor; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.score-line { fill: none; }
+.score-point { fill: var(--paper); }
+.no-score { padding-block: 28px; color: var(--muted); }
+.week-record .weekly-summary { margin: 10px 0; }
+.week-lists { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(0,1fr); gap: 26px; margin-top: 22px; }
+.week-lists h3 { margin: 7px 0; font-size: 18px; }
+.week-lists ul { margin: 0; padding: 0; list-style: none; }
+.week-lists li { display: flex; align-items: baseline; gap: 12px; border-top: 1px solid var(--line); padding: 10px 0; overflow-wrap: anywhere; }
+.week-lists li>small { margin-left: auto; }
+.week-lists li>.text-button { border-left: 3px solid; border-radius: 0; padding-left: 10px; }
+.week-lists time { flex: none; color: var(--muted); font: 13px var(--orbit-mono); }
+.week-lists p { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding: 12px 0; }
+@media (max-width: 760px) {
+  .app-shell .header-actions, .planning-board .section-line { flex-wrap: wrap; }
+  .app-shell .inline-actions { max-width: 100%; }
+  .app-shell .inline-actions select { width: auto; max-width: 100%; }
+  .week-heading { align-items: start; flex-direction: column; gap: 5px; }
+  .week-heading p { text-align: left; font-size: 14px; }
+  .week-heading p small { display: inline; margin-left: 6px; }
+  .week-instrument, .week-lists { grid-template-columns: minmax(0, 1fr); }
+  .week-readout { border-right: 0; border-bottom: 1px solid var(--line); }
+  .score-plot svg { height: 94px; }
+  .week-lists { gap: 15px; }
+}
