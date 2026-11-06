@@ -1,6 +1,7 @@
 // Disposable localhost data only. No external GitHub/Trello/Calendar writes.
 import assert from 'node:assert/strict';
 import { taskSchema, worklogSchema, changeSchema } from '../lib/planning';
+import { paperSchema } from '../lib/papers';
 const base=process.env.TEST_BASE_URL||'http://127.0.0.1:5173';
 if(!/^http:\/\/127\.0\.0\.1:(5173|8787)$/.test(base))throw new Error('Local QA only');
 const owner={'oai-authenticated-user-id':'local_seedy','oai-authenticated-user-email':'seedy@sites.test'};
@@ -41,3 +42,13 @@ const ext=taskSchema.parse({id:'qa-ext-'+crypto.randomUUID(),title:'QA external'
 await mutate({action:'ingest_snapshot',source:{id:'qa-external',kind:'github',title:'QA外部',status:'ok',checkedAt:new Date().toISOString(),lastSuccessAt:null,count:1,error:''},tasks:[ext]});
 assert.equal((await req('/api/planning',{revision:(await read()).revision,action:'queue_task',task:{...ext,state:'done'},reason:'外部は不可'})).status,409);
 console.log('PASS proposals only apply selected changes; external Issue remains read-only');
+const paper=paperSchema.parse({id:'qa-paper-'+crypto.randomUUID(),title:'QA_PRIVATE_PAPER',driveUrl:'https://drive.google.com/file/d/qa-private-pdf/view',taskIds:[id]});
+await mutate({action:'upsert_paper',paper});
+assert.equal((await read()).planning.papers.find((p:any)=>p.id===paper.id).readingState,'unknown');
+await mutate({action:'upsert_paper',paper:{...paper,readingState:'read'}});
+assert.equal((await read()).planning.papers.filter((p:any)=>p.id===paper.id).length,1);
+assert.equal((await read()).planning.papers.find((p:any)=>p.id===paper.id).readingState,'read');
+assert.equal((await req('/api/planning',{revision:(await read()).revision,action:'upsert_paper',paper},other)).status,403);
+for(const response of [await req('/api/plan',undefined,other),await req('/api/plan?view=meeting')])assert.equal(JSON.stringify(response.data).includes('QA_PRIVATE_PAPER'),false);
+assert.equal((await(await fetch(base+'/print',{headers:owner})).text()).includes('QA_PRIVATE_PAPER'),false);
+console.log('PASS paper persistence, reading status, owner-only writes, viewer/meeting/PDF redaction');

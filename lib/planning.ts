@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paperSchema, savePaper } from './papers';
 
 const id = z.string().min(1).max(200);
 const text = z.string().max(12000);
@@ -47,7 +48,7 @@ export const sourceSchema = z.object({ id, kind: z.enum(['github', 'trello', 'ca
 const eventDate = z.string().max(40).refine(v => date.safeParse(v).success && !!v || /^\d{4}-\d{2}-\d{2}T/.test(v) && Number.isFinite(Date.parse(v)), '予定の日付が不正です');
 export const calendarEventSchema = z.object({ id, calendarId: id, title: z.string().min(1).max(300), start: eventDate, end: eventDate, url: link.default(''), cancelled: z.boolean().default(false), projectIds: z.array(id).default([]) });
 export const configSchema = z.object({ privateRepository: z.string().regex(/^[\w.-]+\/[\w.-]+$/).default('owner/private_task'), owners: z.array(z.string()).default([]), organizations: z.array(z.string()).default([]), repositories: z.array(z.string()).default([]), trelloBoard: link.default(''), trelloLists: z.record(z.string()).default({}), trelloLabels: z.record(z.string()).default({}), calendarIds: z.array(z.string()).default([]), schedule: z.object({ time: z.literal('08:00').default('08:00'), timezone: z.literal('Asia/Tokyo').default('Asia/Tokyo'), status: z.enum(['not_configured', 'needs_connection', 'verified']).default('not_configured'), automationId: z.string().default('') }).default({}) });
-export const planningSchema = z.object({ version: z.literal(1).default(1), tasks: z.array(taskSchema).max(3000).default([]), worklogs: z.array(worklogSchema).max(10000).default([]), changes: z.array(changeSchema).max(3000).default([]), operations: z.array(operationSchema).max(10000).default([]), sources: z.array(sourceSchema).default([]), events: z.array(calendarEventSchema).max(3000).default([]), config: configSchema.default({}) }).default({});
+export const planningSchema = z.object({ version: z.literal(1).default(1), papers: z.array(paperSchema).max(3000).default([]), tasks: z.array(taskSchema).max(3000).default([]), worklogs: z.array(worklogSchema).max(10000).default([]), changes: z.array(changeSchema).max(3000).default([]), operations: z.array(operationSchema).max(10000).default([]), sources: z.array(sourceSchema).default([]), events: z.array(calendarEventSchema).max(3000).default([]), config: configSchema.default({}) }).default({});
 export type Planning = z.infer<typeof planningSchema>;
 export const emptyPlanning = (): Planning => planningSchema.parse({});
 export function blankTask(projectIds: string[] = []): Task { return taskSchema.parse({ id: crypto.randomUUID(), title: '新しいタスク', projectIds }); }
@@ -102,6 +103,7 @@ export const snapshotSchema = z.object({ source: sourceSchema, tasks: z.array(ta
 export const snapshotBundleSchema = z.object({ snapshots: z.array(snapshotSchema).min(1).max(50) });
 
 export const planningActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('upsert_paper'), paper: paperSchema }),
   z.object({ action: z.literal('configure'), config: configSchema }),
   z.object({ action: z.literal('queue_task'), task: taskSchema, reason: z.string().min(1).max(5000) }),
   z.object({ action: z.literal('record_worklog'), worklog: worklogSchema }),
@@ -118,6 +120,11 @@ export function applyPlanningAction(current: Planning, input: PlanningAction, no
   if(input.action==='ingest_bundle') { let planning=structuredClone(current);for(const snapshot of input.snapshots)planning=applyPlanningAction(planning,{action:'ingest_snapshot',...snapshot},now).planning;return {planning,result:{saved:true,count:input.snapshots.length},summary:'確認した取得結果を取り込み'}; }
   const p = structuredClone(current); let result: unknown = { saved: true }; let summary = input.action as string;
   function find(id: string) { const t = p.tasks.find(t => t.id === id); if (!t) throw new Error('タスクが見つかりません'); return t; }
+  if (input.action === 'upsert_paper') {
+    p.papers = savePaper(p.papers, input.paper, p.tasks, now);
+    summary = `${input.paper.title}の論文情報を保存`;
+    result = { paperId: input.paper.id };
+  }
   function queue(desired: Task, changeId = '', reason = '') {
     if (p.config.privateRepository === 'owner/private_task') throw new Error('先に連携状況で個人タスクのリポジトリを設定してください');
     const prior = p.tasks.find(t => t.id === desired.id);

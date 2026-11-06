@@ -77,6 +77,7 @@ export async function mutatePlanning(raw: unknown) {
   try { applied = applyPlanningAction(ctx.plan.planning, input); } catch (e) { throw new AppError(e instanceof Error ? e.message : '更新できません', 409); }
   const projectIds = new Set(ctx.plan.projects.map(p => p.id));
   if (applied.planning.tasks.some(t => t.projectIds.some(id => !projectIds.has(id)))) throw new AppError('関連付け先の案件が見つかりません');
+  if (applied.planning.papers.some(p => p.projectIds.some(id => !projectIds.has(id)))) throw new AppError('論文の関連プロジェクトが見つかりません');
   const plan = planSchema.parse({ ...ctx.plan, planning: applied.planning }); const now = new Date().toISOString();
   const results = await db().batch([
     db().prepare('INSERT INTO history (id, revision, actor_id, action, project_id, created_at, summary) SELECT ?, ?, ?, ?, NULL, ?, ? WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ? AND revision = ?)').bind(crypto.randomUUID(), revision + 1, ctx.user!.userId, input.action, now, applied.summary, 'main', revision),
