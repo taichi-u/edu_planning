@@ -1,5 +1,6 @@
 import { readPlan, mutate, readHistory, calendarTargets, prepareCalendar, prepareTaskCalendar, recordCalendar, readPlanning, mutatePlanning, dailyBrief } from '@/lib/store';
 import { planningActionSchema, taskSchema, worklogSchema, changeSchema, planningSchema } from '@/lib/planning';
+import { paperSchema } from '@/lib/papers';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 export const dynamic = 'force-dynamic';
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
@@ -16,10 +17,10 @@ const tools = [
   { name: 'calendar_targets', description: 'Google Calendar同期対象を取得。依頼または承認済みの定期処理で使用。仮データは書き込まない。', inputSchema: object({}) },
   { name: 'calendar_prepare', description: '1項目の同期ロックを取得しイベントID・検索マーカー・payloadを返す。Google Calendarツールで既存を確認して作成/更新する。通信結果が不明なら再作成禁止。実行後calendar_record必須。', inputSchema: object({ projectId: str, milestoneId: str, calendarId: str }, ['projectId','milestoneId','calendarId']) },
   { name: 'calendar_record', description: 'Google Calendar作成/更新成功後のeventIdとcalendar_prepareのreceiptを保存。入力id,lease,fingerprintはreceiptをそのまま渡す。', inputSchema: object({ id: str, lease: str, fingerprint: str, eventId: str }, ['id','lease','fingerprint','eventId']) },
-  { name: 'list_tasks', description: '所有者専用。タスク、実施記録、変更案、同期状態、連携設定とrevisionを取得。共有先には返さない。', inputSchema: object({}) },
+  { name: 'list_tasks', description: '所有者専用。論文、タスク、実施記録、変更案、同期状態、連携設定とrevisionを取得。共有先には返さない。', inputSchema: object({}) },
   { name: 'get_task', description: '所有者専用。タスクと関連記録・変更案を取得。', inputSchema: object({ taskId: str }, ['taskId']) },
-  { name: 'get_planning_schema', description: 'タスク、実施記録、計画変更、同期操作の入力仕様を取得。', inputSchema: object({}) },
-  { name: 'planning_mutate', description: '所有者専用。actionはconfigure/queue_task/record_worklog/propose_changes/review_changes/ingest_snapshot/sync_prepare/sync_record。まずget_planning_schemaを取得。研究タスクの追加・分割時は上位の節目、成果物と確認方法、各タスクの1・2・3・5・8・13の相対見積もりを確認。根拠不足は未見積もりとし、推定は変更案にする。GitHub等への実操作は接続ツールで行い、確認後にsync_record。推測した変更案は採用前に実行しない。外部取得は全ページを確認し失敗を空データとして保存しない。', inputSchema: object({ revision: rev, input: { type: 'object' } }, ['revision', 'input']) },
+  { name: 'get_planning_schema', description: '論文、タスク、実施記録、計画変更、同期操作の入力仕様を取得。', inputSchema: object({}) },
+  { name: 'planning_mutate', description: '所有者専用。actionはupsert_paper/configure/queue_task/record_worklog/propose_changes/review_changes/ingest_snapshot/sync_prepare/sync_record。upsert_paperはSiteの論文情報を保存し、GitHub操作は追加しない。まずget_planning_schemaを取得。研究タスクの追加・分割時は上位の節目、成果物と確認方法、各タスクの1・2・3・5・8・13の相対見積もりを確認。根拠不足は未見積もりとし、推定は変更案にする。GitHub等への実操作は接続ツールで行い、確認後にsync_record。推測した変更案は採用前に実行しない。外部取得は全ページを確認し失敗を空データとして保存しない。', inputSchema: object({ revision: rev, input: { type: 'object' } }, ['revision', 'input']) },
   { name: 'daily_brief', description: '所有者専用。今日と今週の予定・タスク、準備開始、待ち、変更案、失敗、前週の実績を取得。毎朝の通知向け。', inputSchema: object({}) },
   { name: 'task_calendar_prepare', description: '所有者専用。選択したタスクの目標日または正式締切をCalendarへ反映する準備。外部操作後はcalendar_record。', inputSchema: object({ taskId:str, kind:{type:'string',enum:['target','deadline']}, calendarId:str },['taskId','kind','calendarId']) },
 ];
@@ -44,11 +45,11 @@ export async function POST(request: Request) {
         else if (name === 'calendar_prepare') value = await prepareCalendar(args);
         else if (name === 'calendar_record') value = await recordCalendar(args);
         else if (name === 'list_tasks') value = await readPlanning();
-        else if (name === 'get_task') { const d = await readPlanning(); const task = d.planning.tasks.find(t => t.id === args.taskId); if (!task) throw new Error('タスクが見つかりません'); value = { task, revision: d.revision, worklogs: d.planning.worklogs.filter(l => l.taskId === task.id), changes: d.planning.changes.filter(c => c.taskId === task.id) }; }
+        else if (name === 'get_task') { const d = await readPlanning(); const task = d.planning.tasks.find(t => t.id === args.taskId); if (!task) throw new Error('タスクが見つかりません'); value = { task, revision: d.revision, worklogs: d.planning.worklogs.filter(l => l.taskId === task.id), papers: d.planning.papers.filter(p => p.taskIds.includes(task.id) && !p.archived), changes: d.planning.changes.filter(c => c.taskId === task.id) }; }
         else if (name === 'planning_mutate') value = await mutatePlanning({ ...args.input, revision: args.revision });
         else if (name === 'daily_brief') value = await dailyBrief();
         else if (name === 'task_calendar_prepare') value = await prepareTaskCalendar(args);
-        else if (name === 'get_planning_schema') value = { task: zodToJsonSchema(taskSchema), worklog: zodToJsonSchema(worklogSchema), change: zodToJsonSchema(changeSchema), action: zodToJsonSchema(planningActionSchema), planning: zodToJsonSchema(planningSchema) };
+        else if (name === 'get_planning_schema') value = { paper: zodToJsonSchema(paperSchema), task: zodToJsonSchema(taskSchema), worklog: zodToJsonSchema(worklogSchema), change: zodToJsonSchema(changeSchema), action: zodToJsonSchema(planningActionSchema), planning: zodToJsonSchema(planningSchema) };
         else if (name === 'get_schema') { const { zodToJsonSchema } = await import('zod-to-json-schema'); const { projectSchema } = await import('@/lib/domain'); value = zodToJsonSchema(projectSchema); }
         else throw new Error('不明な操作です');
         result = { content: [{ type: 'text', text: JSON.stringify(value) }] };
