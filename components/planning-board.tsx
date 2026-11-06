@@ -79,7 +79,6 @@ export default function PlanningBoard({ data, projects, scope, horizon, anchor, 
   return <section className="planning-board" aria-label="タスクと作業記録">    {error && <p className="error" role="alert">{error}</p>}<p className="saved-status" role="status">{notice}</p>
     {(tab === 'tasks' || tab === 'review') && <WeeklyRecord planning={p} projects={projects} scope={scope} today={today} review={tab === 'review'} onSelect={setSelected}/>}
     {tab === 'tasks' && <><div className="section-line"><h2>作業 <span className="count">{tasks.length}</span></h2><div className="inline-actions"><select aria-label="タスクの状態で絞り込み" value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="active">未完了</option><option value="done">完了・取りやめ</option><option value="all">すべて</option></select><button className="primary" onClick={() => setEditing(blankTask(scope ? [scope] : []))}><Plus size={15}/>作業を追加</button></div></div>
-
       {needsPlanning.length > 0 && <details className="undated-tasks"><summary>完了条件・見積もりの確認待ち <span className="count">{needsPlanning.length}</span></summary>
         <ul>{needsPlanning.map(t => <li key={t.id}><button className="text-button" onClick={() => setSelected(t.id)}>{t.title}</button> · {[!t.acceptance.trim() && '完了条件未記入', t.estimate === null && '未見積もり'].filter(Boolean).join(' / ')}</li>)}</ul>
       </details>}
